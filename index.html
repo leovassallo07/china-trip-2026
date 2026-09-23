@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>China Trip · Noviembre 2026</title>
+<style>
+:root{--bg:#f4f7fb;--panel:#ffffff;--text:#1b2430;--muted:#6b7787;--line:#dde5ee;--accent:#285d8f;--accent2:#d9e8f6;--warm:#f7efe3;--green:#e8f3ea;--gold:#f7efcf}
+*{box-sizing:border-box} body{margin:0;font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:var(--bg);color:var(--text)}
+.wrap{max-width:1180px;margin:auto;padding:28px 18px 60px} .hero{background:linear-gradient(135deg,#143a5b,#2e6ea3);color:white;border-radius:28px;padding:34px;display:grid;grid-template-columns:1.3fr .7fr;gap:20px;align-items:end}
+.hero h1{margin:0;font-size:clamp(32px,5vw,62px);line-height:.95} .hero p{opacity:.84;max-width:650px}
+.hero .meta{display:grid;grid-template-columns:repeat(2,1fr);gap:10px} .pill{background:rgba(255,255,255,.13);padding:14px;border-radius:16px}
+.city-tabs,.day-tabs{display:flex;gap:10px;flex-wrap:wrap;margin:20px 0} button{border:1px solid var(--line);background:white;color:var(--text);padding:12px 16px;border-radius:999px;cursor:pointer;font-weight:650}
+button.active{background:var(--accent);color:white;border-color:var(--accent)} .grid{display:grid;grid-template-columns:1.1fr .9fr;gap:18px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:22px;padding:20px} .photo{min-height:310px;background-size:cover;background-position:center;border-radius:22px;position:relative;overflow:hidden}
+.photo:after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,transparent 40%,rgba(0,0,0,.65))} .photo-copy{position:absolute;z-index:2;left:22px;right:22px;bottom:18px;color:white}
+.kicker{font-size:12px;text-transform:uppercase;letter-spacing:.12em;color:var(--muted);font-weight:800} .bigtemp{font-size:48px;font-weight:800;letter-spacing:-.04em}
+.info-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:14px} .soft{background:#f8fafc;border:1px solid var(--line);padding:15px;border-radius:16px} .soft h3{margin:5px 0 7px;font-size:15px} .soft p{margin:0;color:var(--muted);line-height:1.45}
+.places{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:12px}
+.place{border-radius:16px;min-height:150px;display:flex;align-items:flex-end;font-weight:700;overflow:hidden;position:relative;background:linear-gradient(135deg,#e8edf3,#d8e1eb);border:1px solid var(--line);background-size:cover;background-position:center}
+.place:after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(0,0,0,.03) 25%,rgba(0,0,0,.72) 100%)}
+.place span{position:relative;z-index:2;color:white;padding:14px;width:100%;text-shadow:0 1px 2px rgba(0,0,0,.35)}
+.place.no-photo:after{background:linear-gradient(180deg,rgba(31,55,77,.05),rgba(31,55,77,.22))}
+.place.no-photo span{color:var(--text);text-shadow:none}
+.timeline{margin-top:18px;display:grid;grid-template-columns:repeat(7,1fr);gap:8px} .stop{background:white;border:1px solid var(--line);border-radius:15px;padding:12px;font-size:13px} .stop strong{display:block;margin-bottom:4px}
+.footer-note{margin-top:18px;color:var(--muted);font-size:12px;line-height:1.5} .links a{color:var(--accent);text-decoration:none;font-weight:700}
+@media(max-width:800px){.hero,.grid{grid-template-columns:1fr}.timeline{grid-template-columns:repeat(2,1fr)}.places{grid-template-columns:1fr}.hero .meta{grid-template-columns:1fr 1fr}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <section class="hero">
+    <div>
+      <div style="font-weight:800;letter-spacing:.14em;text-transform:uppercase;font-size:12px;opacity:.75">China Trip · 2026</div>
+      <h1>Tu viaje, día por día.</h1>
+      <p>Una vista visual del itinerario con clima estimado, ropa sugerida, actividades y movimientos principales.</p>
+    </div>
+    <div class="meta">
+      <div class="pill"><b>2–17 nov</b><br><span style="opacity:.75">16 días</span></div>
+      <div class="pill"><b>3 ciudades</b><br><span style="opacity:.75">Beijing · Shanghai · Shenzhen</span></div>
+      <div class="pill"><b>1 maleta</b><br><span style="opacity:.75">facturada incluida</span></div>
+      <div class="pill"><b>Base editable</b><br><span style="opacity:.75">Google Sheets</span></div>
+    </div>
+  </section>
+
+  <div class="city-tabs" id="cities"></div>
+
+  <section class="grid">
+    <div class="photo" id="photo"><div class="photo-copy"><div class="kicker" id="photoKicker" style="color:#dbe8f5"></div><h2 id="photoTitle" style="margin:6px 0 4px;font-size:30px"></h2><div id="photoSub"></div></div></div>
+    <div class="card">
+      <div class="kicker">Clima estimado</div>
+      <div class="bigtemp" id="temp"></div>
+      <div id="weather" style="color:var(--muted);margin-bottom:14px"></div>
+      <div class="soft"><div class="kicker">Qué usar</div><h3>Ropa sugerida</h3><p id="clothes"></p></div>
+      <div class="day-tabs" id="days"></div>
+    </div>
+  </section>
+
+  <section class="card" style="margin-top:18px">
+    <div class="kicker">Agenda del día</div>
+    <h2 id="planTitle" style="margin:6px 0 8px"></h2>
+    <p id="plan" style="font-size:17px;line-height:1.6;color:var(--muted);margin-top:0"></p>
+    <div class="places" id="places"></div>
+  </section>
+
+  <section class="card" style="margin-top:18px">
+    <div class="kicker">Ruta general</div>
+    <div class="timeline">
+      <div class="stop"><strong>2 nov</strong>Bogotá → Ámsterdam</div>
+      <div class="stop"><strong>3 nov</strong>Ámsterdam → París</div>
+      <div class="stop"><strong>4 nov</strong>París → Beijing</div>
+      <div class="stop"><strong>9 nov</strong>Beijing → Shanghai</div>
+      <div class="stop"><strong>12 nov</strong>Shanghai → Shenzhen</div>
+      <div class="stop"><strong>15 nov</strong>Shenzhen → Shanghai</div>
+      <div class="stop"><strong>16–17 nov</strong>Shanghai → Ámsterdam → Bogotá</div>
+    </div>
+  </section>
+
+  <p class="footer-note">Las temperaturas son estimaciones climáticas para noviembre, no un pronóstico meteorológico de 2026. Los traslados Beijing→Shanghai y Shanghai→Shenzhen siguen marcados como “por confirmar” porque los documentos base no especifican medio ni horario. Las fotografías se cargan desde Wikimedia Commons y requieren conexión a internet. Si alguna red bloquea imágenes externas, el diseño mantiene una versión visual de respaldo.</p>
+</div>
+<script>
+const DATA = {"Beijing": [{"date": "4 nov", "weekday": "Miércoles", "temp": "0–10 °C", "weather": "Frío y seco", "plan": "Llegada 17:40 a Beijing Capital (PEK). Traslado al hotel, check-in, cena cercana y descanso.", "clothes": "Abrigo, capas, pantalón largo y calzado cerrado.", "places": ["Beijing Capital Airport", "Cena cerca del hotel", "Descanso / jet lag"], "image": "https://commons.wikimedia.org/wiki/Special:FilePath/Forbidden_City_Beijing_%283020024860%29.jpg?width=1200"}, {"date": "5 nov", "weekday": "Jueves", "temp": "0–10 °C", "weather": "Frío y seco", "plan": "Plaza de Tiananmén, Ciudad Prohibida y Parque Jingshan.", "clothes": "Abrigo medio/grueso, capas y zapatos cómodos.", "places": ["Plaza de Tiananmén", "Ciudad Prohibida", "Parque Jingshan"], "image": "https://commons.wikimedia.org/wiki/Special:FilePath/Forbidden_City_Beijing_%283020024860%29.jpg?width=1200"}, {"date": "6 nov", "weekday": "Viernes", "temp": "0–10 °C", "weather": "Frío; posible viento", "plan": "Excursión a la Gran Muralla, sector Mutianyu, y regreso a Beijing.", "clothes": "Abrigo cortaviento, capas y calzado con buen agarre.", "places": ["Gran Muralla · Mutianyu", "Paisaje montañoso", "Regreso a Beijing"], "image": "https://commons.wikimedia.org/wiki/Special:FilePath/Forbidden_City_Beijing_%283020024860%29.jpg?width=1200"}, {"date": "7 nov", "weekday": "Sábado", "temp": "0–10 °C", "weather": "Fresco y seco", "plan": "Palacio de Verano y recorrido posterior por hutongs y Houhai.", "clothes": "Abrigo, suéter y calzado para caminar.", "places": ["Palacio de Verano", "Hutongs", "Houhai"], "image": "https://commons.wikimedia.org/wiki/Special:FilePath/Forbidden_City_Beijing_%283020024860%29.jpg?width=1200"}, {"date": "8 nov", "weekday": "Domingo", "temp": "0–10 °C", "weather": "Fresco y seco", "plan": "Templo del Cielo, Qianmen y Dashilan. Noche libre y preparación del equipaje.", "clothes": "Capas, chaqueta y zapatos cómodos.", "places": ["Templo del Cielo", "Qianmen", "Dashilan"], "image": "https://commons.wikimedia.org/wiki/Special:FilePath/Forbidden_City_Beijing_%283020024860%29.jpg?width=1200"}, {"date": "9 nov", "weekday": "Lunes", "temp": "0–10 → 11–17 °C", "weather": "Cambio a clima más suave", "plan": "Salida de Beijing y llegada a Shanghai. Si el horario lo permite, paseo nocturno por The Bund.", "clothes": "Capas fáciles de retirar y chaqueta media.", "places": ["Traslado", "Check-in", "The Bund de noche"], "image": "https://commons.wikimedia.org/wiki/Special:FilePath/The_Bund_Shanghai.jpg?width=1200"}], "Shanghai": [{"date": "9 nov", "weekday": "Lunes", "temp": "11–17 °C", "weather": "Fresco", "plan": "Llegada, check-in y paseo por The Bund si el horario del traslado lo permite.", "clothes": "Chaqueta media y capas ligeras.", "places": ["The Bund", "Huangpu River", "Skyline de Pudong"], "image": "https://commons.wikimedia.org/wiki/Special:FilePath/The_Bund_Shanghai.jpg?width=1200"}, {"date": "10 nov", "weekday": "Martes", "temp": "11–17 °C", "weather": "Fresco", "plan": "Yu Garden, Old City, The Bund y Nanjing Road al atardecer.", "clothes": "Chaqueta ligera/media y zapatos cómodos.", "places": ["Yu Garden", "Old City", "Nanjing Road"], "image": "https://commons.wikimedia.org/wiki/Special:FilePath/The_Bund_Shanghai.jpg?width=1200"}, {"date": "11 nov", "weekday": "Miércoles", "temp": "11–17 °C", "weather": "Fresco", "plan": "Pudong, Lujiazui y Shanghai Tower; después, Concesión Francesa.", "clothes": "Chaqueta media, capas y calzado urbano.", "places": ["Lujiazui", "Shanghai Tower", "Concesión Francesa"], "image": "https://commons.wikimedia.org/wiki/Special:FilePath/The_Bund_Shanghai.jpg?width=1200"}, {"date": "12 nov", "weekday": "Jueves", "temp": "11–17 → 18–25 °C", "weather": "Cambio a clima templado", "plan": "Traslado a Shenzhen y paseo suave por Futian o Civic Center según la hora de llegada.", "clothes": "Capas ligeras; guardar el abrigo pesado.", "places": ["Traslado", "Futian", "Civic Center"], "image": "https://commons.wikimedia.org/wiki/Special:FilePath/Shenzhen_Skyline.jpg?width=1200"}, {"date": "15 nov", "weekday": "Domingo", "temp": "11–17 °C", "weather": "Fresco", "plan": "Vuelo Shenzhen–Shanghai: salida 19:10 de SZX Terminal 3 y llegada 21:25 a PVG Terminal 1.", "clothes": "Chaqueta a mano para la llegada a Shanghai.", "places": ["Shenzhen Airport", "Vuelo a Shanghai", "Pudong Airport"], "image": "https://commons.wikimedia.org/wiki/Special:FilePath/The_Bund_Shanghai.jpg?width=1200"}, {"date": "16 nov", "weekday": "Lunes", "temp": "11–17 °C", "weather": "Fresco", "plan": "Vuelo Shanghai–Ámsterdam a las 11:05 desde Pudong Terminal 1; llegada 18:25 a Schiphol.", "clothes": "Capas y abrigo accesible para Ámsterdam.", "places": ["Pudong Airport", "Vuelo internacional", "Ámsterdam"], "image": "https://commons.wikimedia.org/wiki/Special:FilePath/The_Bund_Shanghai.jpg?width=1200"}], "Shenzhen": [{"date": "12 nov", "weekday": "Jueves", "temp": "18–25 °C", "weather": "Templado", "plan": "Llegada desde Shanghai. Paseo por Futian y Civic Center según el horario.", "clothes": "Camiseta/camisa ligera y chaqueta fina.", "places": ["Futian", "Civic Center", "Skyline nocturno"], "image": "https://commons.wikimedia.org/wiki/Special:FilePath/Shenzhen_Skyline.jpg?width=1200"}, {"date": "13 nov", "weekday": "Viernes", "temp": "18–25 °C", "weather": "Templado", "plan": "Civic Center, Lianhuashan Park y zona del Ping An Finance Centre en Futian.", "clothes": "Ropa ligera; chaqueta fina para la noche.", "places": ["Civic Center", "Lianhuashan Park", "Ping An Finance Centre"], "image": "https://commons.wikimedia.org/wiki/Special:FilePath/Shenzhen_Skyline.jpg?width=1200"}, {"date": "14 nov", "weekday": "Sábado", "temp": "18–25 °C", "weather": "Templado", "plan": "Nantou Ancient City, OCT-LOFT y Shenzhen Bay al atardecer.", "clothes": "Ropa cómoda y ligera; zapatos para caminar.", "places": ["Nantou Ancient City", "OCT-LOFT", "Shenzhen Bay"], "image": "https://commons.wikimedia.org/wiki/Special:FilePath/Shenzhen_Skyline.jpg?width=1200"}, {"date": "15 nov", "weekday": "Domingo", "temp": "18–25 °C", "weather": "Templado", "plan": "Mañana libre. Vuelo a Shanghai: salida 19:10 de Bao’an (SZX) Terminal 3.", "clothes": "Ropa ligera + chaqueta accesible para Shanghai.", "places": ["Mañana libre", "Bao’an Airport", "Vuelo a Shanghai"], "image": "https://commons.wikimedia.org/wiki/Special:FilePath/Shenzhen_Skyline.jpg?width=1200"}]};
+const PLACE_IMAGES = {"Ciudad Prohibida": "https://commons.wikimedia.org/wiki/Special:FilePath/Forbidden_City_Beijing_%283020024860%29.jpg?width=800", "Gran Muralla · Mutianyu": "https://commons.wikimedia.org/wiki/Special:FilePath/Great_Wall_at_Mutianyu_%2822602551077%29.jpg?width=800", "Templo del Cielo": "https://commons.wikimedia.org/wiki/Special:FilePath/Temple-of-heaven.jpg?width=800", "The Bund": "https://commons.wikimedia.org/wiki/Special:FilePath/The_Bund_Shanghai.jpg?width=800", "The Bund de noche": "https://commons.wikimedia.org/wiki/Special:FilePath/The_Bund_Shanghai.jpg?width=800", "Shanghai Tower": "https://commons.wikimedia.org/wiki/Special:FilePath/20191114_Shanghai_Tower_%282%29.jpg?width=800", "Skyline de Pudong": "https://commons.wikimedia.org/wiki/Special:FilePath/The_Bund_Shanghai.jpg?width=800", "Civic Center": "https://commons.wikimedia.org/wiki/Special:FilePath/Shenzhen_Skyline.jpg?width=800", "Skyline nocturno": "https://commons.wikimedia.org/wiki/Special:FilePath/Shenzhen_Skyline.jpg?width=800", "Shenzhen Bay": "https://commons.wikimedia.org/wiki/Special:FilePath/Shenzhen_Skyline.jpg?width=800", "Ping An Finance Centre": "https://commons.wikimedia.org/wiki/Special:FilePath/Shenzhen_Skyline.jpg?width=800"};
+let city="Beijing", idx=0;
+const $=s=>document.querySelector(s);
+function renderCities(){
+  const el=$("#cities"); el.innerHTML="";
+  Object.keys(DATA).forEach(c=>{const b=document.createElement("button"); b.textContent=c; b.className=c===city?"active":""; b.onclick=()=>{city=c;idx=0;render();}; el.appendChild(b)})
+}
+function render(){
+  renderCities();
+  const d=DATA[city][idx];
+  const hero=$("#photo");
+  hero.style.backgroundImage="linear-gradient(135deg,#163b5b,#507da3)";
+  const probe=new Image();
+  probe.onload=()=>{hero.style.backgroundImage=`url('${d.image}')`};
+  probe.onerror=()=>{hero.style.backgroundImage="linear-gradient(135deg,#163b5b,#507da3)"};
+  probe.src=d.image;
+  $("#photoKicker").textContent=`${d.weekday} · ${d.date}`;
+  $("#photoTitle").textContent=city;
+  $("#photoSub").textContent=d.weather;
+  $("#temp").textContent=d.temp;
+  $("#weather").textContent=d.weather;
+  $("#clothes").textContent=d.clothes;
+  $("#planTitle").textContent=`${d.weekday}, ${d.date} · ${city}`;
+  $("#plan").textContent=d.plan;
+  const days=$("#days"); days.innerHTML="";
+  DATA[city].forEach((x,i)=>{const b=document.createElement("button"); b.textContent=x.date; b.className=i===idx?"active":""; b.onclick=()=>{idx=i;render();}; days.appendChild(b)})
+  const p=$("#places"); p.innerHTML="";
+  d.places.forEach((x,i)=>{const div=document.createElement("div");div.className="place";const img=PLACE_IMAGES[x];if(img){div.style.backgroundImage=`url("${img}")`}else{div.classList.add("no-photo")}div.innerHTML=`<span>${["📍","📸","✨"][i%3]}&nbsp; ${x}</span>`;p.appendChild(div)})
+}
+render();
+</script>
+</body>
+</html>
