@@ -1,0 +1,405 @@
+# Create this file as .github/workflows/publicar-china.yml
+# In Settings > Pages choose Source: GitHub Actions.
+# No photos are committed to the repository. The published index.html contains
+# the photo bytes. The existing source index.html is kept unchanged.
+name: China Trip - fotos integradas
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - index.html
+      - .github/workflows/publicar-china.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: china-trip-pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Read repository
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - name: Cache validated photos
+        uses: actions/cache@v4
+        with:
+          path: .china-trip-cache
+          key: china-trip-photos-cc0-v1
+      - name: Install image and browser tools
+        run: |
+          python -m pip install 'Pillow>=11,<13' 'playwright>=1.49,<2'
+          python -m playwright install --with-deps chromium
+      - name: Download and embed real photographs
+        shell: bash
+        run: |
+          python - <<'PYBUILD'
+          """Build the existing China Trip dashboard with real, embedded JPEG images.
+
+          Run on GitHub Actions, not in the visitor's browser. Fail closed: if an image
+          cannot be downloaded or decoded, do not publish a partial replacement.
+          """
+          from __future__ import annotations
+          import base64
+          import html
+          import io
+          import json
+          import os
+          from pathlib import Path
+          import re
+          import time
+          import urllib.error
+          import urllib.request
+          from urllib.parse import quote
+          from PIL import Image, ImageOps
+
+          VERSION = 'FOTOS-INTEGRADAS-1'
+          MAX_DOWNLOAD = 24 * 1024 * 1024
+          MAX_IMAGE_PIXELS = 50_000_000
+          Image.MAX_IMAGE_PIXELS = MAX_IMAGE_PIXELS
+          MANIFEST = {
+              'forbidden': {
+                  'filename': 'Beijing_Forbidden_City_Viewed_from_Jingshan_Park_(10553754905).jpg',
+                  'url': 'https://upload.wikimedia.org/wikipedia/commons/5/5c/Beijing_Forbidden_City_Viewed_from_Jingshan_Park_%2810553754905%29.jpg',
+                  'caption': 'Ciudad Prohibida vista desde Jingshan (foto de 1991)',
+                  'author': 'Gary Todd',
+              },
+              'wall': {
+                  'filename': 'Great_Wall_of_China_at_Mutianyu.JPG',
+                  'url': 'https://upload.wikimedia.org/wikipedia/commons/e/eb/Great_Wall_of_China_at_Mutianyu.JPG',
+                  'caption': 'Gran Muralla en Mutianyu',
+                  'author': 'CTLiotta',
+              },
+              'temple': {
+                  'filename': '2014.09.29.165903_Temple_of_Heaven_Bejing.jpg',
+                  'url': 'https://upload.wikimedia.org/wikipedia/commons/d/d0/2014.09.29.165903_Temple_of_Heaven_Bejing.jpg',
+                  'caption': 'Templo del Cielo',
+                  'author': 'Hermann Luyken',
+              },
+              'bund': {
+                  'filename': 'Shanghai_the_Bund.jpg',
+                  'url': 'https://upload.wikimedia.org/wikipedia/commons/f/f0/Shanghai_the_Bund.jpg',
+                  'caption': 'Shanghai, zona de The Bund',
+                  'author': 'Mussi Katz',
+              },
+              'yu': {
+                  'filename': 'Shanghai,_Yu_Garden.jpg',
+                  'url': 'https://upload.wikimedia.org/wikipedia/commons/a/a3/Shanghai%2C_Yu_Garden.jpg',
+                  'caption': 'Yu Garden, Shanghai',
+                  'author': 'Nikolamikovic82',
+              },
+              'shenzhen': {
+                  'filename': 'Shenzhen_Skyline_from_Meilin_Reservoir_Dam6.jpg',
+                  'url': 'https://upload.wikimedia.org/wikipedia/commons/0/0a/Shenzhen_Skyline_from_Meilin_Reservoir_Dam6.jpg',
+                  'caption': 'Vista de Shenzhen desde el embalse de Meilin',
+                  'author': 'Huangdan2060',
+              },
+          }
+
+
+          def normalize_image(raw: bytes) -> bytes:
+              """Decode actual pixels, remove metadata, resize, and recompress once."""
+              if len(raw) > MAX_DOWNLOAD:
+                  raise ValueError('Image exceeds the download limit')
+              with Image.open(io.BytesIO(raw)) as check:
+                  check.verify()
+              with Image.open(io.BytesIO(raw)) as original:
+                  if min(original.size) < 200:
+                      raise ValueError('Unexpected tiny image; refusing to publish')
+                  image = ImageOps.exif_transpose(original).convert('RGB')
+                  image.thumbnail((1400, 1050), Image.Resampling.LANCZOS)
+                  buffer = io.BytesIO()
+                  image.save(buffer, format='JPEG', quality=83, optimize=True)
+              result = buffer.getvalue()
+              if not result.startswith(b'\xff\xd8'):
+                  raise ValueError('JPEG conversion failed')
+              return result
+
+
+          def download_image(key: str, item: dict, cache: Path) -> bytes:
+              """Only exact, verified Wikimedia photo URLs; no proxy or arbitrary URLs."""
+              target = cache / (key + '.jpg')
+              if target.exists():
+                  try:
+                      with Image.open(target) as im:
+                          im.verify()
+                      return target.read_bytes()
+                  except Exception:
+                      target.unlink()
+              last_error = None
+              for attempt in range(4):
+                  request = urllib.request.Request(item['url'], headers={
+                      'User-Agent': 'ChinaTripPhotoBuilder/1.0 (https://github.com/leovassallo07/china-trip-2026)',
+                      'Accept': 'image/jpeg,image/*;q=0.9',
+                  })
+                  try:
+                      with urllib.request.urlopen(request, timeout=60) as response:
+                          if response.status != 200:
+                              raise RuntimeError('HTTP status ' + str(response.status))
+                          if not response.headers.get_content_type().startswith('image/'):
+                              raise ValueError('The server did not return an image')
+                          raw = response.read(MAX_DOWNLOAD + 1)
+                      result = normalize_image(raw)
+                      target.write_bytes(result)
+                      print('Validated image:', key, len(result), 'bytes', flush=True)
+                      return result
+                  except (urllib.error.URLError, OSError, ValueError, RuntimeError) as exc:
+                      last_error = exc
+                      delay = min(5 * (2 ** attempt), 60)
+                      if isinstance(exc, urllib.error.HTTPError):
+                          if exc.code == 404:
+                              break
+                          retry_after = exc.headers.get('Retry-After', '')
+                          if retry_after.isdigit():
+                              delay = min(max(delay, int(retry_after)), 120)
+                      if attempt < 3:
+                          print('Retrying', key, 'after', delay, 'seconds:', exc, flush=True)
+                          time.sleep(delay)
+              raise RuntimeError('Could not obtain ' + key + '. Nothing will be published. ' + str(last_error))
+
+
+          def extract_data(source: str) -> dict:
+              """Parse, never eval, the existing itinerary; preserve its actual contents."""
+              match = re.search(r'\bconst\s+DATA\s*=\s*', source)
+              if not match:
+                  raise ValueError('Expected V2/V4 const DATA was not found in index.html')
+              data, _ = json.JSONDecoder().raw_decode(source[match.end():])
+              if not isinstance(data, dict) or set(data) != {'Beijing', 'Shanghai', 'Shenzhen'}:
+                  raise ValueError('Unrecognized itinerary structure; no overwrite performed')
+              for city, days in data.items():
+                  if not isinstance(days, list) or not days:
+                      raise ValueError('Missing days for ' + city)
+                  for day in days:
+                      if not isinstance(day, dict):
+                          raise ValueError('Invalid day')
+                      for field in ('date', 'weekday', 'temp', 'weather', 'plan', 'clothes'):
+                          if not isinstance(day.get(field), str):
+                              raise ValueError('Invalid field ' + field)
+                      places = day.get('places')
+                      if not isinstance(places, list):
+                          raise ValueError('Invalid places')
+                      for place in places:
+                          if not (isinstance(place, str) or
+                                  isinstance(place, list) and len(place) == 2 and
+                                  all(isinstance(v, str) for v in place)):
+                              raise ValueError('Invalid place record')
+              return data
+
+
+          def safe_json(value) -> str:
+              return json.dumps(value, ensure_ascii=True, separators=(',', ':')).replace('<', '\\u003c')
+
+
+          CSS = r'''
+          /* Photo fix: no remote fonts, proxies, scripts or image requests. */
+          .photo,.place{background-image:none!important;background-color:#e3eaf0;position:relative;isolation:isolate}
+          .photo>.embedded-photo,.place>.embedded-photo{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;z-index:-2;display:block}
+          .photo::after,.place::after{z-index:-1;pointer-events:none}
+          .photo-caption{position:absolute;top:14px;left:14px;right:14px;z-index:3;display:flex;align-items:start;justify-content:space-between;gap:10px}
+          .photo-caption small,.embedded-status{font-size:11px;line-height:1.4;background:rgba(13,39,59,.85);color:#fff;padding:6px 9px;border-radius:8px}
+          .place .place-copy{display:block;position:absolute;left:14px;right:14px;bottom:14px;z-index:2;color:white;font-size:15px;font-weight:750;padding:0;width:auto;text-shadow:0 1px 3px #0009}
+          .place .place-copy small{display:block;font-size:10px;line-height:1.35;font-weight:400;opacity:.93;margin-top:6px}
+          .embedded-note{font-size:12px;line-height:1.6;color:#536275;padding:16px;background:white;border:1px solid #dce5ee;border-radius:15px;margin-top:20px}
+          .embedded-note a{color:#205f90}.embedded-note summary{cursor:pointer;font-weight:700}.embedded-note ul{padding-left:20px}
+          .embedded-version{display:inline-block;font-weight:750;color:#135b40;background:#e2f4e9;border:1px solid #bddccb;border-radius:9px;padding:8px 12px;font-size:12px;margin:0 0 14px}
+          .photo-error{position:absolute;inset:0;display:grid;place-items:center;background:#fff2e4;color:#72421e;padding:20px;z-index:5;font-size:14px}
+          @media(max-width:600px){.temp,.bigtemp{font-size:clamp(24px,7vw,40px);overflow-wrap:anywhere}.photo{min-height:280px}.photo-caption{top:10px;left:10px;right:10px}.photo-caption small{max-width:75%}.place{height:210px}}
+          '''
+
+          JS = r'''
+          'use strict';
+          const $ = s => document.querySelector(s);
+          const cityPhotos={Beijing:'forbidden',Shanghai:'bund',Shenzhen:'shenzhen'};
+          let city='Beijing',idx=0;
+          function text(ids,value){for(const id of ids){const el=document.getElementById(id);if(el)el.textContent=value;}}
+          function picture(key){
+            if(!ASSETS[key] || !ASSETS[key].src.startsWith('data:image/jpeg;base64,')) throw new Error('Missing embedded photo: '+key);
+            const im=document.createElement('img');im.className='embedded-photo';im.alt=ASSETS[key].caption;
+            im.decoding='async';im.src=ASSETS[key].src;
+            im.addEventListener('error',()=>{const e=document.createElement('div');e.className='photo-error';e.textContent='No se pudo decodificar la foto incorporada. Comprueba que el HTML se haya publicado completo.';im.parentElement?.appendChild(e);});
+            return im;
+          }
+          function photoKey(name,hostCity){
+            const n=name.toLowerCase();
+            if(n.includes('mutianyu')||n.includes('muralla')||n.includes('monta\u00f1oso'))return 'wall';
+            if(n.includes('cielo'))return 'temple';
+            if(n.includes('prohibida')||n.includes('jingshan'))return 'forbidden';
+            if(n.includes('yu garden'))return 'yu';
+            if(n.includes('bund')||n.includes('huangpu')||n.includes('pudong')||n.includes('shanghai'))return 'bund';
+            if(n.includes('shenzhen')||n.includes('futian')||n.includes('civic')||n.includes('ping an')||n.includes('lianhuashan')||n.includes('bao'))return 'shenzhen';
+            return cityPhotos[hostCity];
+          }
+          function heroKey(day){
+            const date=parseInt(day.date,10);
+            if(city==='Beijing'&&date===6)return 'wall';
+            if(city==='Beijing'&&date===8)return 'temple';
+            if(city==='Beijing'&&date===9)return 'bund';
+            if(city==='Shanghai'&&date===10)return 'yu';
+            if(city==='Shanghai'&&date===12)return 'shenzhen';
+            return cityPhotos[city];
+          }
+          function button(label,active,handler){const b=document.createElement('button');b.type='button';b.textContent=label;b.className=active?'active':'';b.setAttribute('aria-pressed',String(active));b.onclick=handler;return b;}
+          function render(){
+            const day=DATA[city][idx];
+            $('#cities').replaceChildren(...Object.keys(DATA).map(c=>button(c,c===city,()=>{city=c;idx=0;render();})));
+            $('#days').replaceChildren(...DATA[city].map((d,i)=>button(d.date,i===idx,()=>{idx=i;render();})));
+            const hero=$('#photo');hero.querySelectorAll('.embedded-photo,.photo-caption,.skyline,.photo-error').forEach(x=>x.remove());
+            hero.style.backgroundImage='none';const key=heroKey(day);hero.prepend(picture(key));
+            const caption=document.createElement('div');caption.className='photo-caption';
+            const label=document.createElement('small');label.textContent=ASSETS[key].caption;caption.append(label);
+            const status=document.createElement('small');status.textContent='Foto integrada';caption.append(status);hero.append(caption);
+            text(['photoDate','photoKicker'],day.weekday+' \u00b7 '+day.date);
+            text(['photoCity','photoTitle'],city);text(['photoWeather','photoSub','weather'],day.weather);
+            text(['temp'],day.temp);text(['clothes'],day.clothes);
+            text(['title','planTitle'],day.weekday+', '+day.date+' \u00b7 '+city);text(['plan'],day.plan);
+            $('#places').replaceChildren(...day.places.map(p=>{
+              const name=Array.isArray(p)?p[0]:p;const key=photoKey(name,city);
+              const card=document.createElement('div');card.className='place';card.append(picture(key));
+              const copy=document.createElement('div');copy.className='place-copy';copy.textContent=name;
+              const info=document.createElement('small');info.textContent='Foto de referencia: '+ASSETS[key].caption;
+              copy.append(info);card.append(copy);return card;
+            }));
+          }
+          render();
+          '''
+
+
+          def build(source: str, output: Path, cache: Path) -> None:
+              data = extract_data(source)
+              # No changes to dates, temperatures, clothing, agenda or place names.
+              for days in data.values():
+                  for day in days:
+                      day.pop('image', None)
+                      day['places'] = [p[0] if isinstance(p, list) else p for p in day['places']]
+              cache.mkdir(parents=True, exist_ok=True)
+              assets = {}
+              for key, item in MANIFEST.items():
+                  raw = download_image(key, item, cache)
+                  assets[key] = {
+                      'src': 'data:image/jpeg;base64,' + base64.b64encode(raw).decode('ascii'),
+                      'caption': item['caption'],
+                  }
+              # Support the delivered V2 and V4 HTML structures. Do not execute old code.
+              for element in ('cities', 'days', 'photo', 'temp', 'clothes', 'plan', 'places'):
+                  if not re.search(r'\bid=[\"\']' + element + r'[\"\']', source):
+                      raise ValueError('Required element not found: ' + element)
+              page = re.sub(r'<script\b[^>]*>.*?</script\s*>', '', source, flags=re.S | re.I)
+              page = re.sub(r'<p\b[^>]*class=[\"\'](?:note|footer-note)[\"\'][^>]*>.*?</p>', '', page, flags=re.S | re.I)
+              page = page.replace('</style>', CSS + '\n</style>', 1)
+              badge = '<div class="embedded-version">' + VERSION + ' | Fotograf\u00edas dentro del HTML</div>'
+              page = page.replace('<div class="wrap">', '<div class="wrap">' + badge, 1)
+              credits = []
+              for item in MANIFEST.values():
+                  link = 'https://commons.wikimedia.org/wiki/File:' + quote(item['filename'])
+                  credits.append('<li>' + html.escape(item['caption']) + ' \u2014 ' + html.escape(item['author']) +
+                                 ' \u00b7 CC0 1.0 \u00b7 <a href="' + html.escape(link, quote=True) +
+                                 '" target="_blank" rel="noopener noreferrer">Ficha original</a></li>')
+              notes = '<section class="embedded-note"><b>Fotograf\u00edas incorporadas.</b> No se descargan fotos al abrir esta p\u00e1gina. '
+              notes += 'Se reutilizan seis fotograf\u00edas verificadas; cada tarjeta identifica lo que muestra la imagen. '
+              notes += 'Las im\u00e1genes de referencia no representan tu hotel, aeropuerto o cada lugar exacto. '
+              notes += 'Se conservan los datos del itinerario base. Las temperaturas son orientativas, no un pron\u00f3stico diario. '
+              notes += '<details><summary>Cr\u00e9ditos y fuentes de las fotograf\u00edas</summary><ul>' + ''.join(credits) + '</ul>'
+              notes += '<p>Im\u00e1genes redimensionadas y comprimidas a JPEG; el encuadre visual se adapta a cada tarjeta. '
+              notes += '<a href="https://creativecommons.org/publicdomain/zero/1.0/" target="_blank" rel="noopener noreferrer">Licencia CC0 1.0</a>.</p></details></section>'
+              code = '<script>\nconst DATA=' + safe_json(data) + ';\nconst ASSETS=' + safe_json(assets) + ';\n' + JS + '\n</script>'
+              page = page.replace('</body>', '<div class="wrap" style="padding-top:0">' + notes + '</div>' + code + '</body>')
+              if 'images.weserv.nl' in page or 'Special:FilePath' in page:
+                  raise ValueError('A remote image reference remains; refusing to publish')
+              if page.count('data:image/jpeg;base64,') != len(assets) + 1:
+                  raise ValueError('Embedded image count did not match')
+              output.parent.mkdir(parents=True, exist_ok=True)
+              output.write_text(page, encoding='utf-8')
+              (output.parent / '.nojekyll').write_text('', encoding='utf-8')
+              report = 'Built ' + VERSION + ': ' + str(len(assets)) + ' embedded photos, ' + str(len(page.encode('utf-8'))) + ' bytes.'
+              print(report, flush=True)
+              summary = os.environ.get('GITHUB_STEP_SUMMARY')
+              if summary:
+                  Path(summary).write_text('## China Trip\n\n' + report + '\n\nItinerary preserved. Image downloads validated before deployment.\n', encoding='utf-8')
+
+
+          if __name__ == '__main__':
+              source = Path('index.html').read_text(encoding='utf-8')
+              build(source, Path('_site/index.html'), Path('.china-trip-cache'))
+          PYBUILD
+      - name: Verify all city and day views offline
+        shell: bash
+        run: |
+          python - <<'PYVERIFY'
+          """Check every city/day in a browser with network access disabled."""
+          import json
+          import os
+          from pathlib import Path
+          import sys
+          from playwright.sync_api import sync_playwright
+
+          index = Path(sys.argv[1] if len(sys.argv) > 1 else '_site/index.html').resolve()
+          errors = []
+          requests = []
+          checked_views = 0
+          with sync_playwright() as p:
+              options = {'headless': True, 'args': ['--no-sandbox']}
+              if os.environ.get('CHROMIUM_EXECUTABLE'):
+                  options['executable_path'] = os.environ['CHROMIUM_EXECUTABLE']
+              browser = p.chromium.launch(**options)
+              context = browser.new_context(offline=True)
+              page = context.new_page()
+              page.on('pageerror', lambda error: errors.append(str(error)))
+              page.on('request', lambda req: requests.append(req.url) if req.url.startswith(('http:', 'https:')) else None)
+              page.set_content(index.read_text(encoding='utf-8'), wait_until='load')
+              cities = page.evaluate('Object.keys(DATA)')
+              for width in [1280, 390]:
+                  page.set_viewport_size({'width': width, 'height': 900})
+                  for city in cities:
+                      page.locator('#cities button').filter(has_text=city).click()
+                      count = page.locator('#days button').count()
+                      for day_index in range(count):
+                          page.locator('#days button').nth(day_index).click()
+                          page.evaluate('Promise.all(Array.from(document.images, im => im.decode()))')
+                          images = page.evaluate('Array.from(document.images, im => ({ok:im.complete&&im.naturalWidth>=200,embedded:im.currentSrc.startsWith("data:image/jpeg;base64,")}))')
+                          assert len(images) >= 2 and all(x['ok'] and x['embedded'] for x in images), (city, day_index, images)
+                          assert page.locator('.photo-error').count() == 0
+                          assert page.evaluate('document.documentElement.scrollWidth <= innerWidth + 2'), (city, day_index, width, 'horizontal overflow')
+                          checked_views += 1
+              browser.close()
+          assert not errors, errors
+          assert not requests, requests
+          report = {'views_checked': checked_views, 'external_requests': 0, 'javascript_errors': 0, 'all_images_decode_offline': True}
+          print(json.dumps(report, indent=2))
+          summary = os.environ.get('GITHUB_STEP_SUMMARY')
+          if summary:
+              with open(summary, 'a', encoding='utf-8') as f:
+                  f.write('\n## Browser validation\n\n```json\n' + json.dumps(report, indent=2) + '\n```\n')
+          PYVERIFY
+      - name: Package the verified site
+        uses: actions/upload-pages-artifact@v4
+        with:
+          path: _site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+      - name: Publish the verified version
+        id: deployment
+        uses: actions/deploy-pages@v4
