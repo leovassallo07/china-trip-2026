@@ -1,0 +1,424 @@
+name: Add travel money converter
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/currency-converter.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  update-and-publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Add China Trip money converter
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import json, re, urllib.request, datetime
+
+          p=Path('index.html')
+          html=p.read_text(encoding='utf-8')
+          marker='CHINA-MONEY-CONVERTER-1'
+
+          if marker in html:
+              print('Converter already installed')
+          else:
+              # Build-time fallback rate. Browser will attempt a fresher rate.
+              url='https://open.er-api.com/v6/latest/COP'
+              req=urllib.request.Request(url,headers={'User-Agent':'ChinaTrip2026/1.0'})
+              with urllib.request.urlopen(req,timeout=30) as r:
+                  data=json.load(r)
+              assert data['result']=='success'
+              cny=float(data['rates']['CNY'])
+              usd=float(data['rates']['USD'])
+              updated=data.get('time_last_update_utc','')
+
+              css=r'''
+              /* CHINA-MONEY-CONVERTER-1 */
+              .money-section{
+                margin-top:20px;
+                position:relative;
+                overflow:hidden;
+                background:
+                  radial-gradient(circle at 91% 10%,rgba(198,154,74,.17),transparent 16rem),
+                  linear-gradient(135deg,#2b4c43 0%,#24443c 50%,#17332d 100%);
+                border:1px solid #ad8a50;
+                border-radius:17px;
+                padding:26px;
+                color:#fffaf0;
+                box-shadow:0 12px 32px rgba(38,42,30,.12);
+              }
+              .money-section:after{
+                content:"财";
+                position:absolute;
+                right:25px;
+                top:6px;
+                font-family:Georgia,serif;
+                font-size:118px;
+                color:rgba(237,204,142,.075);
+                pointer-events:none;
+              }
+              .money-head{
+                display:flex;
+                justify-content:space-between;
+                gap:20px;
+                align-items:flex-start;
+                position:relative;
+                z-index:1;
+              }
+              .money-head h2{
+                color:#fff7e5;
+                margin:5px 0 6px;
+                font-size:31px;
+              }
+              .money-head p{
+                margin:0;
+                color:#cbdad2;
+                font-size:13px;
+                line-height:1.6;
+                max-width:630px;
+              }
+              .money-live{
+                flex:0 0 auto;
+                display:inline-flex;
+                align-items:center;
+                gap:7px;
+                border:1px solid rgba(229,199,139,.38);
+                padding:7px 10px;
+                border-radius:999px;
+                color:#f0d49e;
+                font-size:10px;
+                letter-spacing:.06em;
+                text-transform:uppercase;
+              }
+              .money-live i{
+                width:7px;height:7px;border-radius:50%;background:#89b999;display:block;
+                box-shadow:0 0 0 4px rgba(137,185,153,.10);
+              }
+              .money-grid{
+                display:grid;
+                grid-template-columns:1.18fr .91fr .91fr;
+                gap:13px;
+                margin-top:20px;
+                position:relative;
+                z-index:1;
+              }
+              .money-box{
+                min-width:0;
+                background:rgba(255,250,240,.07);
+                border:1px solid rgba(233,211,170,.22);
+                border-radius:12px;
+                padding:16px;
+              }
+              .money-box.source{
+                background:#fff8ea;
+                color:#28251f;
+                border-color:#ead3aa;
+              }
+              .money-label{
+                display:flex;
+                align-items:center;
+                justify-content:space-between;
+                gap:10px;
+                font-size:10px;
+                font-weight:800;
+                text-transform:uppercase;
+                letter-spacing:.11em;
+                color:#dbc08d;
+              }
+              .money-box.source .money-label{color:#8c662e}
+              .money-code{opacity:.76;font-weight:650}
+              .money-input-wrap{
+                display:flex;
+                align-items:center;
+                gap:8px;
+                margin-top:10px;
+              }
+              .money-symbol{
+                font-family:Georgia,serif;
+                font-size:28px;
+                color:#8f202d;
+              }
+              #copAmount{
+                width:100%;
+                min-width:0;
+                border:0;
+                outline:0;
+                background:transparent;
+                color:#26231e;
+                font-family:Georgia,"Times New Roman",serif;
+                font-size:clamp(27px,3vw,38px);
+                font-weight:400;
+              }
+              #copAmount::-webkit-outer-spin-button,#copAmount::-webkit-inner-spin-button{appearance:none;margin:0}
+              .money-value{
+                margin-top:10px;
+                font-family:Georgia,"Times New Roman",serif;
+                font-size:clamp(26px,3vw,38px);
+                line-height:1.08;
+                color:#fff4dc;
+                overflow-wrap:anywhere;
+              }
+              .money-sub{
+                margin-top:7px;
+                color:#b8c9c0;
+                font-size:11px;
+                line-height:1.45;
+              }
+              .money-tools{
+                display:flex;
+                flex-wrap:wrap;
+                gap:8px;
+                align-items:center;
+                margin-top:15px;
+                position:relative;
+                z-index:1;
+              }
+              .money-tools button{
+                background:rgba(255,250,240,.08);
+                border-color:rgba(233,211,170,.30);
+                color:#f6e7ca;
+                padding:8px 11px;
+                font-size:11px;
+                border-radius:7px;
+              }
+              .money-tools button:hover{background:rgba(255,250,240,.13)}
+              .money-tools .refresh-rate{
+                margin-left:auto;
+                background:#9a2c36;
+                border-color:#b85d5e;
+                color:#fff8ec;
+              }
+              .money-foot{
+                margin-top:12px;
+                color:#9fb5aa;
+                font-size:10px;
+                line-height:1.55;
+                position:relative;
+                z-index:1;
+              }
+              .money-foot strong{color:#dbc08d}
+              .money-error{color:#f3c7ad}
+              @media(max-width:800px){
+                .money-section{padding:21px}
+                .money-head{display:block}
+                .money-live{margin-top:12px}
+                .money-grid{grid-template-columns:1fr}
+                .money-tools .refresh-rate{margin-left:0}
+              }
+              '''
+
+              section=f'''
+              <section class="money-section" id="travel-money" aria-labelledby="money-title">
+                <div class="money-head">
+                  <div>
+                    <div class="kicker" style="color:#d9ba81">Dinero para el viaje · 旅费</div>
+                    <h2 id="money-title">Billetera de viaje</h2>
+                    <p>Escribe cuánto llevas en pesos colombianos y calcula su equivalente aproximado en yuan chino y dólares estadounidenses.</p>
+                  </div>
+                  <div class="money-live"><i></i><span id="rateStatus">Tasa de referencia</span></div>
+                </div>
+
+                <div class="money-grid">
+                  <label class="money-box source">
+                    <span class="money-label"><span>Pesos colombianos</span><span class="money-code">COP</span></span>
+                    <span class="money-input-wrap">
+                      <span class="money-symbol">$</span>
+                      <input id="copAmount" type="number" inputmode="decimal" min="0" step="10000" value="1000000" aria-label="Monto en pesos colombianos">
+                    </span>
+                    <span class="money-sub">Puedes cambiar este monto cuando quieras.</span>
+                  </label>
+
+                  <div class="money-box">
+                    <div class="money-label"><span>Yuan chino</span><span class="money-code">CNY · ¥</span></div>
+                    <div class="money-value" id="cnyValue">—</div>
+                    <div class="money-sub" id="cnyRate">Calculando tasa…</div>
+                  </div>
+
+                  <div class="money-box">
+                    <div class="money-label"><span>Dólar estadounidense</span><span class="money-code">USD · $</span></div>
+                    <div class="money-value" id="usdValue">—</div>
+                    <div class="money-sub" id="usdRate">Calculando tasa…</div>
+                  </div>
+                </div>
+
+                <div class="money-tools" aria-label="Montos rápidos">
+                  <button type="button" data-cop="500000">$500 mil</button>
+                  <button type="button" data-cop="1000000">$1 millón</button>
+                  <button type="button" data-cop="2000000">$2 millones</button>
+                  <button type="button" data-cop="5000000">$5 millones</button>
+                  <button type="button" class="refresh-rate" id="refreshRates">Actualizar tasa ↻</button>
+                </div>
+
+                <div class="money-foot" id="rateInfo">
+                  <strong>Referencia:</strong> tasa media de mercado. Los bancos, casas de cambio y tarjetas pueden aplicar una tasa distinta y comisiones.
+                </div>
+              </section>
+              '''
+
+              js=f'''
+              <script>
+              (()=>{{
+                const MONEY_MARKER="{marker}";
+                const FALLBACK={{CNY:{cny!r},USD:{usd!r},updated:{json.dumps(updated)}}};
+                const API="https://open.er-api.com/v6/latest/COP";
+                let rates={{...FALLBACK}};
+
+                const amount=document.getElementById("copAmount");
+                const cny=document.getElementById("cnyValue");
+                const usd=document.getElementById("usdValue");
+                const cnyRate=document.getElementById("cnyRate");
+                const usdRate=document.getElementById("usdRate");
+                const info=document.getElementById("rateInfo");
+                const status=document.getElementById("rateStatus");
+                const refresh=document.getElementById("refreshRates");
+
+                const nfCOP=new Intl.NumberFormat("es-CO",{{maximumFractionDigits:0}});
+                const nfCNY=new Intl.NumberFormat("zh-CN",{{minimumFractionDigits:2,maximumFractionDigits:2}});
+                const nfUSD=new Intl.NumberFormat("en-US",{{minimumFractionDigits:2,maximumFractionDigits:2}});
+
+                function whenLabel(raw){{
+                  if(!raw)return "fecha no disponible";
+                  const d=new Date(raw);
+                  if(Number.isNaN(d.getTime()))return raw;
+                  return new Intl.DateTimeFormat("es-CO",{{dateStyle:"medium",timeStyle:"short",timeZone:"America/Bogota"}}).format(d)+" (Colombia)";
+                }}
+
+                function render(){{
+                  const cop=Math.max(0,Number(amount.value)||0);
+                  cny.textContent="¥ "+nfCNY.format(cop*rates.CNY);
+                  usd.textContent="$ "+nfUSD.format(cop*rates.USD);
+                  cnyRate.textContent="1 CNY ≈ $ "+nfCOP.format(1/rates.CNY)+" COP";
+                  usdRate.textContent="1 USD ≈ $ "+nfCOP.format(1/rates.USD)+" COP";
+                }}
+
+                async function updateRates(userInitiated=false){{
+                  status.textContent="Actualizando…";
+                  refresh.disabled=true;
+                  try{{
+                    const res=await fetch(API,{{cache:"no-store"}});
+                    if(!res.ok)throw new Error("HTTP "+res.status);
+                    const data=await res.json();
+                    if(data.result!=="success"||!data.rates?.CNY||!data.rates?.USD)throw new Error("Respuesta incompleta");
+                    rates={{CNY:Number(data.rates.CNY),USD:Number(data.rates.USD),updated:data.time_last_update_utc||new Date().toISOString()}};
+                    localStorage.setItem("chinaTripRates",JSON.stringify(rates));
+                    status.textContent="Tasa actualizada";
+                    info.innerHTML="<strong>Última tasa:</strong> "+whenLabel(rates.updated)+". Fuente: ExchangeRate-API. Es una referencia; tu banco o casa de cambio puede cobrar diferente.";
+                  }}catch(err){{
+                    try{{
+                      const saved=JSON.parse(localStorage.getItem("chinaTripRates")||"null");
+                      if(saved?.CNY&&saved?.USD)rates=saved;
+                    }}catch(_e){{}}
+                    status.textContent="Tasa guardada";
+                    info.innerHTML='<strong>Sin actualización en línea.</strong> Se usa la última tasa disponible en el sitio. <span class="money-error">Comprueba la tasa antes de cambiar dinero.</span>';
+                  }}finally{{
+                    refresh.disabled=false;
+                    render();
+                  }}
+                }}
+
+                amount.addEventListener("input",render);
+                document.querySelectorAll("[data-cop]").forEach(b=>b.addEventListener("click",()=>{{
+                  amount.value=b.dataset.cop;render();
+                }}));
+                refresh.addEventListener("click",()=>updateRates(true));
+
+                try{{
+                  const saved=JSON.parse(localStorage.getItem("chinaTripRates")||"null");
+                  if(saved?.CNY&&saved?.USD)rates=saved;
+                }}catch(_e){{}}
+                render();
+                updateRates(false);
+              }})();
+              </script>
+              '''
+
+              html=html.replace('</style>',css+'\n</style>',1)
+
+              # Place after the route-general card. Its section closes immediately after the timeline block.
+              route_anchor='''  <section class="card" style="margin-top:18px">\n    <div class="kicker">Ruta general</div>'''
+              start=html.find(route_anchor)
+              if start==-1:
+                  raise RuntimeError('Route section not found')
+              close=html.find('</section>',start)
+              if close==-1:
+                  raise RuntimeError('Route section close not found')
+              insert_at=close+len('</section>')
+              html=html[:insert_at]+'\n'+section+html[insert_at:]
+
+              html=html.replace('</body>',js+'\n</body>',1)
+              p.write_text(html,encoding='utf-8')
+              print('Installed converter with fallback rates',cny,usd,updated)
+
+          out=p.read_text(encoding='utf-8')
+          assert out.count(marker)>=2
+          assert 'id="copAmount"' in out and 'id="cnyValue"' in out and 'id="usdValue"' in out
+          assert 'open.er-api.com/v6/latest/COP' in out
+          assert '/* CHINA-THEME-2026 */' in out
+          assert out.count('data:image/jpeg;base64,')>=6
+          PY
+
+      - name: Commit converter to index
+        shell: bash
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add index.html
+          git diff --cached --quiet || git commit -m 'Add COP to CNY and USD travel money converter'
+          git push origin HEAD:main
+
+      - name: Prepare Pages artifact
+        shell: bash
+        run: |
+          mkdir -p _site
+          cp index.html _site/index.html
+          touch _site/.nojekyll
+
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v4
+        with:
+          path: _site
+      - name: Publish
+        id: deployment
+        uses: actions/deploy-pages@v4
+
+      - name: Verify converter is live
+        env:
+          PAGE_URL: ${{ steps.deployment.outputs.page_url }}
+        shell: bash
+        run: |
+          python - <<'PY'
+          import os,time,urllib.request
+          url=os.environ['PAGE_URL']
+          for attempt in range(12):
+              try:
+                  with urllib.request.urlopen(url+'?feature=money&check='+str(int(time.time())),timeout=30) as r:
+                      text=r.read().decode('utf-8')
+                  assert 'CHINA-MONEY-CONVERTER-1' in text
+                  assert 'id="copAmount"' in text
+                  print('Live converter verified:',url)
+                  break
+              except Exception as e:
+                  print('Waiting for publication:',e,flush=True)
+                  if attempt==11: raise
+                  time.sleep(10)
+          PY
