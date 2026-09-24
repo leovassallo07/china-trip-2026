@@ -1,0 +1,192 @@
+name: China Trip - reparar fotos
+
+on:
+  push:
+    branches: [main]
+    paths: [.github/workflows/fotos-integradas.yml]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: china-trip-photo-repair
+  cancel-in-progress: false
+
+jobs:
+  repair:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install photo and browser tools
+        run: |
+          python -m pip install 'Pillow>=11,<13' 'playwright>=1.49,<2'
+          python -m playwright install --with-deps chromium
+      - name: Incorporate actual photo bytes into HTML
+        shell: bash
+        run: |
+          python - <<'PY'
+          import base64, hashlib, html, io, json, re, time, urllib.request
+          from pathlib import Path
+          from PIL import Image, ImageOps
+          VERSION = 'FOTOS-INTEGRADAS-2'
+          source = Path('index.html').read_text(encoding='utf-8')
+          raw_source = Path('index.html').read_bytes()
+          sha = hashlib.sha1(b'blob '+str(len(raw_source)).encode()+b'\0'+raw_source).hexdigest()
+          if sha != '58d48232b90c7b7e9c320fb902b335609fc5993b':
+              raise RuntimeError('Source changed since review. Stop rather than overwrite unreviewed content.')
+          match = re.search(r'const\s+DATA\s*=\s*', source)
+          if not match:
+              raise RuntimeError('Itinerary DATA not found')
+          data, _ = json.JSONDecoder().raw_decode(source[match.end():])
+          original_data = json.loads(json.dumps(data))
+          if set(data) != {'Beijing','Shanghai','Shenzhen'}:
+              raise RuntimeError('Unexpected itinerary')
+          photos = {
+            'forbidden': ('https://upload.wikimedia.org/wikipedia/commons/5/5c/Beijing_Forbidden_City_Viewed_from_Jingshan_Park_%2810553754905%29.jpg', 'Ciudad Prohibida vista desde Jingshan; fotografia de 1991', 'Gary Todd', 'CC0 1.0', 'https://creativecommons.org/publicdomain/zero/1.0/', 'https://commons.wikimedia.org/wiki/File:Beijing_Forbidden_City_Viewed_from_Jingshan_Park_(10553754905).jpg'),
+            'wall': ('https://upload.wikimedia.org/wikipedia/commons/e/eb/Great_Wall_of_China_at_Mutianyu.JPG', 'Gran Muralla en Mutianyu', 'CTLiotta', 'CC0 1.0', 'https://creativecommons.org/publicdomain/zero/1.0/', 'https://commons.wikimedia.org/wiki/File:Great_Wall_of_China_at_Mutianyu.JPG'),
+            'temple': ('https://upload.wikimedia.org/wikipedia/commons/d/d0/2014.09.29.165903_Temple_of_Heaven_Bejing.jpg', 'Templo del Cielo, Beijing', 'Hermann Luyken', 'CC0 1.0', 'https://creativecommons.org/publicdomain/zero/1.0/', 'https://commons.wikimedia.org/wiki/File:2014.09.29.165903_Temple_of_Heaven_Bejing.jpg'),
+            'bund': ('https://upload.wikimedia.org/wikipedia/commons/f/f2/The_Bund_Shanghai.jpg', 'Vista nocturna de Pudong desde The Bund', 'Mattias Hill', 'CC BY-SA 4.0', 'https://creativecommons.org/licenses/by-sa/4.0/', 'https://commons.wikimedia.org/wiki/File:The_Bund_Shanghai.jpg'),
+            'yu': ('https://upload.wikimedia.org/wikipedia/commons/a/a3/Shanghai%2C_Yu_Garden.jpg', 'Yu Garden, Shanghai', 'Nikolamikovic82', 'CC0 1.0', 'https://creativecommons.org/publicdomain/zero/1.0/', 'https://commons.wikimedia.org/wiki/File:Shanghai,_Yu_Garden.jpg'),
+            'shenzhen': ('https://upload.wikimedia.org/wikipedia/commons/0/0a/Shenzhen_Skyline_from_Meilin_Reservoir_Dam6.jpg', 'Shenzhen visto desde el embalse de Meilin', 'Huangdan2060', 'CC0 1.0', 'https://creativecommons.org/publicdomain/zero/1.0/', 'https://commons.wikimedia.org/wiki/File:Shenzhen_Skyline_from_Meilin_Reservoir_Dam6.jpg')
+          }
+          assets = {}
+          Path('_site').mkdir(exist_ok=True)
+          for key, (url, caption, author, license, license_url, source_url) in photos.items():
+              for attempt in range(4):
+                  try:
+                      req = urllib.request.Request(url, headers={'User-Agent':'ChinaTripPhotoRepair/2.0 (https://github.com/leovassallo07/china-trip-2026)', 'Accept':'image/jpeg,image/*;q=0.9'})
+                      with urllib.request.urlopen(req, timeout=60) as response:
+                          if response.status != 200 or not response.headers.get_content_type().startswith('image/'):
+                              raise ValueError('Response is not an image')
+                          raw = response.read(25*1024*1024+1)
+                      if len(raw)>25*1024*1024: raise ValueError('Image exceeds size limit')
+                      with Image.open(io.BytesIO(raw)) as im: im.verify()
+                      with Image.open(io.BytesIO(raw)) as im:
+                          if min(im.size)<200: raise ValueError('Image too small')
+                          im = ImageOps.exif_transpose(im).convert('RGB')
+                          im.thumbnail((1280,1000), Image.Resampling.LANCZOS)
+                          output=io.BytesIO(); im.save(output,'JPEG',quality=82,optimize=True)
+                      photo=output.getvalue()
+                      assets[key]={'src':'data:image/jpeg;base64,'+base64.b64encode(photo).decode(), 'caption':caption}
+                      print('VALIDATED',key,len(photo),'bytes',flush=True)
+                      break
+                  except Exception as error:
+                      print('Photo download attempt',attempt+1,key,str(error),flush=True)
+                      if attempt==3: raise
+                      time.sleep(10*(attempt+1))
+          for days in data.values():
+              for day in days:
+                  day.pop('image',None)
+                  day['places']=[p[0] if isinstance(p,list) else p for p in day['places']]
+          for city, days in data.items():
+              for old,new in zip(original_data[city],days):
+                  for field in ('date','weekday','temp','weather','plan','clothes'):
+                      assert old[field]==new[field], 'Itinerary altered'
+          page=re.sub(r'<script\b[^>]*>.*?</script\s*>','',source,flags=re.S|re.I)
+          page=re.sub(r'<p\b[^>]*class=[\"\'](?:note|footer-note)[\"\'][^>]*>.*?</p>','',page,flags=re.S|re.I)
+          css='''
+          .photo,.place{background:none!important;background-color:#dce5ee!important;position:relative;isolation:isolate}
+          .real-photo{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;z-index:0;display:block}
+          .photo:after,.place:after{z-index:1;pointer-events:none}
+          .photo-copy{z-index:2}.place{min-height:210px}
+          .place-copy{position:absolute;z-index:2;bottom:15px;left:15px;right:15px;color:#fff;font-weight:750;text-shadow:0 1px 4px #000}
+          .place-copy small{display:block;font-weight:400;font-size:11px;line-height:1.4;margin-top:6px}
+          .photo-caption{position:absolute;z-index:2;top:14px;left:14px;right:14px;color:#fff;font-size:11px;line-height:1.4;text-shadow:0 1px 4px #000}
+          .photo-caption b{display:inline-block;background:#142d43bd;padding:6px 9px;border-radius:8px;font-weight:500}
+          .version-badge{display:inline-block;background:#e0f3e7;color:#155738;border:1px solid #bedeca;border-radius:8px;padding:8px 12px;margin-bottom:15px;font-size:12px;font-weight:700}
+          .credits{font-size:12px;line-height:1.6;margin-top:20px;color:#526271;padding:20px;background:white;border:1px solid #dde5ee;border-radius:16px}
+          .credits summary{font-weight:750;cursor:pointer}.credits a{color:#285d8f}
+          @media(max-width:600px){.bigtemp{font-size:clamp(23px,7vw,40px);overflow-wrap:anywhere}.photo{min-height:300px}.photo-caption{max-width:90%}}
+          '''
+          page=page.replace('</style>',css+'\n</style>',1)
+          page=page.replace('<div class="wrap">','<div class="wrap"><div class="version-badge">'+VERSION+' | Fotografias incorporadas</div>',1)
+          items=[]
+          for url,caption,author,license,license_url,source_url in photos.values():
+              items.append('<li>'+html.escape(caption)+' &mdash; '+html.escape(author)+' &middot; <a href="'+source_url+'" target="_blank" rel="noopener noreferrer">Original</a> &middot; <a href="'+license_url+'" target="_blank" rel="noopener noreferrer">'+license+'</a></li>')
+          notes='<section class="credits"><b>Fotos dentro del archivo.</b> Se incorporan seis fotografias reales; no se solicitan a servidores externos al abrir la pagina. Se reutilizan en varias tarjetas: el pie identifica lo que muestra cada imagen de referencia, no tu hotel ni cada aeropuerto. Las temperaturas se conservan como estimaciones orientativas de noviembre, no como pronostico diario. Los traslados pendientes siguen sin horarios confirmados.<details><summary>Creditos de las fotografias</summary><ul>'+''.join(items)+'</ul><p>Las imagenes se han redimensionado, comprimido a JPEG y encuadrado para las tarjetas. Cada imagen conserva su licencia original; la version adaptada de la foto de Mattias Hill se ofrece bajo CC BY-SA 4.0.</p></details></section>'
+          js=r'''
+          'use strict';
+          const $=s=>document.querySelector(s);
+          const CITY_PHOTOS={Beijing:'forbidden',Shanghai:'bund',Shenzhen:'shenzhen'};
+          let city='Beijing',idx=0;
+          function photoKey(name,c){const n=name.toLowerCase();if(n.includes('mutianyu')||n.includes('muralla')||n.includes('monta\u00f1oso'))return 'wall';if(n.includes('cielo'))return 'temple';if(n.includes('prohibida')||n.includes('jingshan'))return 'forbidden';if(n.includes('yu garden'))return 'yu';if(n.includes('bund')||n.includes('huangpu')||n.includes('pudong')||n.includes('shanghai'))return 'bund';if(n.includes('shenzhen')||n.includes('futian')||n.includes('civic')||n.includes('bao')||n.includes('ping an')||n.includes('lianhuashan'))return 'shenzhen';return CITY_PHOTOS[c];}
+          function heroKey(d){const n=parseInt(d.date,10);if(city==='Beijing'&&n===6)return 'wall';if(city==='Beijing'&&n===8)return 'temple';if(city==='Beijing'&&n===9)return 'bund';if(city==='Shanghai'&&n===10)return 'yu';if(city==='Shanghai'&&n===12)return 'shenzhen';return CITY_PHOTOS[city];}
+          function image(key){const a=ASSETS[key];if(!a||!a.src.startsWith('data:image/jpeg;base64,'))throw Error('Missing embedded image: '+key);const im=document.createElement('img');im.className='real-photo';im.alt=a.caption;im.src=a.src;return im;}
+          function btn(label,selected,fn){const b=document.createElement('button');b.type='button';b.textContent=label;b.className=selected?'active':'';b.setAttribute('aria-pressed',String(selected));b.onclick=fn;return b;}
+          function render(){
+            const d=DATA[city][idx];
+            $('#cities').replaceChildren(...Object.keys(DATA).map(c=>btn(c,c===city,()=>{city=c;idx=0;render();})));
+            $('#days').replaceChildren(...DATA[city].map((x,i)=>btn(x.date,i===idx,()=>{idx=i;render();})));
+            const hero=$('#photo');hero.querySelectorAll('.real-photo,.photo-caption').forEach(e=>e.remove());hero.style.backgroundImage='none';const k=heroKey(d);hero.prepend(image(k));
+            const cap=document.createElement('div');cap.className='photo-caption';const label=document.createElement('b');label.textContent=ASSETS[k].caption;cap.append(label);hero.append(cap);
+            $('#photoKicker').textContent=d.weekday+' \u00b7 '+d.date;$('#photoTitle').textContent=city;$('#photoSub').textContent=d.weather;
+            $('#temp').textContent=d.temp;$('#weather').textContent=d.weather;$('#clothes').textContent=d.clothes;$('#planTitle').textContent=d.weekday+', '+d.date+' \u00b7 '+city;$('#plan').textContent=d.plan;
+            $('#places').replaceChildren(...d.places.map(name=>{const card=document.createElement('div');card.className='place';const key=photoKey(name,city);card.append(image(key));const copy=document.createElement('div');copy.className='place-copy';copy.textContent=name;const detail=document.createElement('small');detail.textContent='Foto de referencia: '+ASSETS[key].caption;copy.append(detail);card.append(copy);return card;}));
+          }
+          render();
+          '''
+          def safe(value):return json.dumps(value,ensure_ascii=True,separators=(',',':')).replace('<','\\u003c')
+          script='<script>\nconst DATA='+safe(data)+';\nconst ASSETS='+safe(assets)+';\n'+js+'\n</script>'
+          page=page.replace('</body>','<div class="wrap" style="padding-top:0">'+notes+'</div>'+script+'</body>')
+          assert 'images.weserv.nl' not in page and 'Special:FilePath' not in page
+          assert page.count('data:image/jpeg;base64,')==7
+          Path('_site/index.html').write_text(page,encoding='utf-8')
+          Path('_site/build-report.json').write_text(json.dumps({'version':VERSION,'photos':len(assets),'bytes':len(page.encode()),'itinerary_preserved':True},indent=2))
+          print('Built',len(page.encode()),'bytes with',len(assets),'real embedded photos')
+          PY
+      - name: Verify every view with network disabled
+        shell: bash
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          from playwright.sync_api import sync_playwright
+          errors=[]; requests=[]; views=0
+          with sync_playwright() as p:
+              browser=p.chromium.launch(headless=True,args=['--no-sandbox'])
+              context=browser.new_context(offline=True)
+              page=context.new_page()
+              page.on('pageerror',lambda e:errors.append(str(e)))
+              page.on('request',lambda r:requests.append(r.url) if r.url.startswith(('http:','https:')) else None)
+              page.set_content(Path('_site/index.html').read_text(encoding='utf-8'),wait_until='load')
+              for width in (1280,390):
+                  page.set_viewport_size({'width':width,'height':900})
+                  for city in page.evaluate('Object.keys(DATA)'):
+                      page.locator('#cities button').filter(has_text=city).click()
+                      for i in range(page.locator('#days button').count()):
+                          page.locator('#days button').nth(i).click()
+                          page.evaluate('Promise.all(Array.from(document.images,i=>i.decode()))')
+                          assert page.evaluate('Array.from(document.images).every(i=>i.complete&&i.naturalWidth>=200&&i.currentSrc.startsWith("data:image/jpeg;base64,"))')
+                          assert page.evaluate('document.images.length===4')
+                          assert page.evaluate('document.documentElement.scrollWidth<=innerWidth+2'),(city,i,width,'overflow')
+                          views+=1
+                          if i==0:page.screenshot(path=f'_site/preview-{city}-{width}.png',full_page=True)
+              browser.close()
+          assert not errors,errors
+          assert not requests,requests
+          report={'views_checked':views,'external_requests':len(requests),'javascript_errors':errors,'all_photos_decode_offline':True}
+          Path('_site/browser-report.json').write_text(json.dumps(report,indent=2))
+          print(json.dumps(report,indent=2))
+          PY
+      - name: Save verified HTML and screenshots
+        uses: actions/upload-artifact@v4
+        with:
+          name: china-trip-fotos-integradas
+          path: _site/
+          retention-days: 7
+      - name: Commit only the verified index.html
+        shell: bash
+        run: |
+          git fetch origin main
+          test "$(git rev-parse origin/main)" = "$GITHUB_SHA" || { echo 'Repository changed during validation; refusing overwrite.'; exit 1; }
+          cp _site/index.html index.html
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add index.html
+          git commit -m 'Fix photos: embed six verified images in index.html'
+          git push origin HEAD:main
