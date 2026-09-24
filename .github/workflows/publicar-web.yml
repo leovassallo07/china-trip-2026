@@ -1,0 +1,84 @@
+name: Publicar China Trip
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - index.html
+      - .github/workflows/publicar-web.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate the self-contained page
+        run: |
+          python - <<'PY'
+          import base64, hashlib, json, re, shutil
+          from pathlib import Path
+          raw=Path('index.html').read_bytes()
+          text=raw.decode('utf-8')
+          assert 'FOTOS-INTEGRADAS-2' in text, 'The embedded-photo version is required'
+          match=re.search(r'const\s+ASSETS\s*=\s*',text)
+          assert match, 'Embedded photos missing'
+          assets,_=json.JSONDecoder().raw_decode(text[match.end():])
+          assert len(assets)==6
+          for key,image in assets.items():
+              assert image['src'].startswith('data:image/jpeg;base64,')
+              decoded=base64.b64decode(image['src'].split(',',1)[1],validate=True)
+              assert decoded.startswith(b'\xff\xd8') and decoded.endswith(b'\xff\xd9'), key
+          assert 'Special:FilePath' not in text and 'images.weserv.nl' not in text
+          Path('_site').mkdir()
+          shutil.copyfile('index.html','_site/index.html')
+          Path('_site/.nojekyll').write_text('')
+          print('Validated 6 embedded JPEGs; HTML SHA256:',hashlib.sha256(raw).hexdigest())
+          PY
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v4
+        with:
+          path: _site
+      - name: Publish
+        id: deployment
+        uses: actions/deploy-pages@v4
+      - name: Verify the actual public page
+        env:
+          PAGE_URL: ${{ steps.deployment.outputs.page_url }}
+        run: |
+          python - <<'PY'
+          import hashlib,os,time,urllib.request
+          from pathlib import Path
+          expected=Path('_site/index.html').read_bytes()
+          url=os.environ['PAGE_URL']
+          if not url.startswith('https://leovassallo07.github.io/china-trip-2026'):
+              raise RuntimeError('Unexpected publication URL')
+          for attempt in range(12):
+              try:
+                  req=urllib.request.Request(url+'?v=fotos-integradas-2&check='+str(int(time.time())),headers={'Cache-Control':'no-cache','User-Agent':'ChinaTripVerification/2.0'})
+                  with urllib.request.urlopen(req,timeout=30) as response:
+                      actual=response.read()
+                  assert actual==expected, 'The published HTML is not the verified file yet'
+                  result='Public page verified: '+url+'\nSHA256: '+hashlib.sha256(actual).hexdigest()+'\nPhotos are embedded; no external image requests.'
+                  print(result)
+                  with open(os.environ['GITHUB_STEP_SUMMARY'],'a',encoding='utf-8') as summary:
+                      summary.write('## Publication verified\n\n'+result+'\n')
+                  break
+              except Exception as error:
+                  print('Waiting for publication:',error,flush=True)
+                  if attempt==11:raise
+                  time.sleep(10)
+          PY
