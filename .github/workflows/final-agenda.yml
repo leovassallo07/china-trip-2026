@@ -6,9 +6,14 @@ on:
   workflow_dispatch:
 permissions:
   contents: write
+  pages: write
+  id-token: write
 jobs:
   update:
     runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
         with: {ref: main}
@@ -65,3 +70,39 @@ jobs:
           git add index.html
           git diff --cached --quiet || git commit -m "Update final China mission agenda"
           git push origin HEAD:main
+      - name: Prepare Pages artifact
+        shell: bash
+        run: |
+          mkdir -p _site
+          cp index.html _site/index.html
+          touch _site/.nojekyll
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v4
+        with:
+          path: _site
+      - name: Publish
+        id: deployment
+        uses: actions/deploy-pages@v4
+      - name: Verify public page
+        env:
+          PAGE_URL: ${{ steps.deployment.outputs.page_url }}
+        shell: bash
+        run: |
+          python - <<'PY'
+          import os,time,urllib.request
+          url=os.environ['PAGE_URL']
+          for i in range(12):
+              try:
+                  req=urllib.request.Request(url+'?agenda=final-2026&check='+str(int(time.time())),headers={'Cache-Control':'no-cache'})
+                  with urllib.request.urlopen(req,timeout=30) as r:
+                      t=r.read().decode('utf-8')
+                  assert 'FINAL-AGENDA-2026-09-30' in t
+                  assert 'Unitree Robotics' in t
+                  assert '4 ciudades' in t
+                  print('Public page verified',url)
+                  break
+              except Exception as e:
+                  print('Waiting for publication',e,flush=True)
+                  if i==11: raise
+                  time.sleep(10)
+          PY
