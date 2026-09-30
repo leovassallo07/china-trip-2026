@@ -1,0 +1,406 @@
+name: Improve agenda and checklist
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/agenda-checklist.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  improve:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Improve agenda presentation and checklist
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import re
+
+          p = Path('index.html')
+          h = p.read_text(encoding='utf-8')
+          marker = 'AGENDA-CHECKLIST-UX-1'
+
+          if marker not in h:
+              # Replace plain agenda paragraph with a timeline container.
+              h = h.replace(
+                  '<p id="plan" style="font-size:17px;line-height:1.6;color:var(--muted);margin-top:0"></p>',
+                  '<div id="plan" class="agenda-timeline" aria-live="polite"></div>',
+                  1
+              )
+
+              css = r'''
+              /* AGENDA-CHECKLIST-UX-1 */
+              .agenda-timeline{
+                position:relative;
+                margin:18px 0 4px;
+                padding-left:23px;
+              }
+              .agenda-timeline:before{
+                content:"";
+                position:absolute;
+                left:7px;
+                top:8px;
+                bottom:8px;
+                width:2px;
+                background:linear-gradient(#a52c38,#d7b16b,#31594f);
+                border-radius:2px;
+              }
+              .agenda-item{
+                position:relative;
+                display:grid;
+                grid-template-columns:minmax(88px,120px) 1fr;
+                gap:14px;
+                align-items:start;
+                padding:0 0 16px;
+              }
+              .agenda-item:last-child{padding-bottom:0}
+              .agenda-item:before{
+                content:"";
+                position:absolute;
+                left:-20px;
+                top:8px;
+                width:10px;
+                height:10px;
+                border-radius:50%;
+                background:#fff8ea;
+                border:3px solid #9a2c36;
+                box-shadow:0 0 0 3px #f5ead7;
+              }
+              .agenda-time{
+                display:inline-flex;
+                width:max-content;
+                max-width:100%;
+                padding:6px 9px;
+                border-radius:7px;
+                background:#f2e5cf;
+                color:#7d3b2b;
+                font-size:12px;
+                font-weight:850;
+                letter-spacing:.02em;
+                line-height:1.25;
+              }
+              .agenda-item.is-general .agenda-time{
+                background:#e6eee9;
+                color:#31594f;
+              }
+              .agenda-copy{
+                min-width:0;
+                padding:2px 0 0;
+                color:#57534d;
+                line-height:1.58;
+                font-size:15px;
+              }
+              .agenda-copy strong{
+                color:#2d2924;
+                font-weight:750;
+              }
+              .agenda-summary{
+                margin:0 0 14px;
+                padding:11px 13px;
+                border-left:3px solid #c59b50;
+                background:#faf4e8;
+                border-radius:0 8px 8px 0;
+                color:#6b6258;
+                font-size:12px;
+                line-height:1.55;
+              }
+
+              .checklist-head{
+                display:flex;
+                align-items:center;
+                justify-content:space-between;
+                gap:12px;
+                flex-wrap:wrap;
+                margin-bottom:12px;
+              }
+              .checklist-status{
+                display:flex;
+                align-items:center;
+                gap:8px;
+                color:#6c6257;
+                font-size:12px;
+                font-weight:750;
+              }
+              .checklist-status b{
+                color:#31594f;
+                font-family:Georgia,serif;
+                font-size:19px;
+                font-weight:500;
+              }
+              .checklist-reset{
+                border:1px solid #d8c9af;
+                background:#fffaf0;
+                color:#7e4b32;
+                border-radius:8px;
+                padding:8px 10px;
+                font-size:11px;
+                font-weight:750;
+                cursor:pointer;
+              }
+              .check-grid{
+                grid-template-columns:repeat(3,minmax(0,1fr))!important;
+              }
+              .check-item{
+                position:relative;
+                display:flex;
+                align-items:center;
+                gap:10px;
+                padding:12px 13px;
+                border-radius:10px;
+                background:#f7f2e8;
+                border:1px solid #eadfc9;
+                color:#4c453d;
+                font-size:12px;
+                font-weight:700;
+                cursor:pointer;
+                transition:background .16s,border-color .16s,opacity .16s,transform .16s;
+                user-select:none;
+              }
+              .check-item:hover{transform:translateY(-1px);border-color:#c7aa74}
+              .check-item input{
+                appearance:none;
+                width:20px;
+                height:20px;
+                flex:0 0 20px;
+                border:2px solid #aa8c5d;
+                border-radius:5px;
+                background:#fffdf7;
+                display:grid;
+                place-content:center;
+                margin:0;
+                cursor:pointer;
+              }
+              .check-item input:before{
+                content:"";
+                width:10px;
+                height:6px;
+                border-left:2px solid #fff;
+                border-bottom:2px solid #fff;
+                transform:rotate(-45deg) scale(0);
+                transition:transform .12s ease;
+                margin-top:-2px;
+              }
+              .check-item input:checked{
+                background:#31594f;
+                border-color:#31594f;
+              }
+              .check-item input:checked:before{transform:rotate(-45deg) scale(1)}
+              .check-item:has(input:checked){
+                background:#e8eee9;
+                border-color:#a9bcae;
+                color:#617067;
+                opacity:.82;
+              }
+              .check-item:has(input:checked) span{text-decoration:line-through;text-decoration-thickness:1px}
+              .checklist-note{
+                margin-top:11px;
+                color:#81776b;
+                font-size:10px;
+                line-height:1.5;
+              }
+              @media(max-width:760px){
+                .agenda-item{grid-template-columns:1fr;gap:6px;padding-bottom:18px}
+                .agenda-time{margin-top:0}
+                .check-grid{grid-template-columns:1fr 1fr!important}
+              }
+              @media(max-width:480px){
+                .check-grid{grid-template-columns:1fr!important}
+                .agenda-copy{font-size:14px}
+              }
+              '''
+
+              h = h.replace('</style>', css + '\n</style>', 1)
+
+              # Add JS helper before the existing render() function.
+              helper = r'''
+              function parseAgenda(plan){
+                const normalized=(plan||'').replace(/s+/g,' ').trim();
+                if(!normalized)return [];
+                const rx=/((?:d{1,2}:d{2})(?:s*[–-]s*d{1,2}:d{2})?)s*·s*/g;
+                const marks=[...normalized.matchAll(rx)];
+                if(!marks.length)return [{time:'Durante el día',text:normalized,general:true}];
+                const items=[];
+                const prefix=normalized.slice(0,marks[0].index).trim().replace(/[.;]s*$/,'');
+                if(prefix)items.push({time:'Durante el día',text:prefix,general:true});
+                marks.forEach((m,i)=>{
+                  const start=m.index+m[0].length;
+                  const end=i+1<marks.length?marks[i+1].index:normalized.length;
+                  let text=normalized.slice(start,end).trim();
+                  text=text.replace(/^[.;]s*/,'').replace(/[.;]s*$/,'');
+                  if(text)items.push({time:m[1].replace(/s+/g,' '),text});
+                });
+                return items;
+              }
+              function renderAgenda(plan){
+                const host=$('#plan');
+                host.replaceChildren();
+                const items=parseAgenda(plan);
+                const summary=document.createElement('div');
+                summary.className='agenda-summary';
+                summary.textContent=items.length+' bloque'+(items.length===1?'':'s')+' en la agenda de este día';
+                host.append(summary);
+                items.forEach(it=>{
+                  const row=document.createElement('div');
+                  row.className='agenda-item'+(it.general?' is-general':'');
+                  const time=document.createElement('div');
+                  time.className='agenda-time';
+                  time.textContent=it.time;
+                  const copy=document.createElement('div');
+                  copy.className='agenda-copy';
+                  copy.textContent=it.text;
+                  row.append(time,copy);
+                  host.append(row);
+                });
+              }
+              '''
+
+              h = h.replace('function render(){', helper + '\nfunction render(){', 1)
+              h = h.replace("$('#plan').textContent=d.plan;", "renderAgenda(d.plan);", 1)
+
+              # Add checklist enhancer near the end of body.
+              checklist_js = r'''
+              <script>
+              (() => {
+                const STORAGE_KEY='chinaTripChecklistV1';
+                const grid=document.querySelector('.check-grid');
+                if(!grid || grid.dataset.enhanced==='1') return;
+                grid.dataset.enhanced='1';
+
+                const original=[...grid.querySelectorAll(':scope > span')].map(x=>x.textContent.replace(/^✓s*/,'').trim());
+                grid.replaceChildren();
+
+                const saved=JSON.parse(localStorage.getItem(STORAGE_KEY)||'{}');
+                const title=grid.closest('.checklist-guide')?.querySelector('h2');
+                const head=document.createElement('div');
+                head.className='checklist-head';
+                const status=document.createElement('div');
+                status.className='checklist-status';
+                const count=document.createElement('b');
+                const label=document.createElement('span');
+                label.textContent='listos';
+                status.append(count,label);
+                const reset=document.createElement('button');
+                reset.type='button';
+                reset.className='checklist-reset';
+                reset.textContent='Desmarcar todo';
+                head.append(status,reset);
+                if(title) title.after(head); else grid.before(head);
+
+                function update(){
+                  const boxes=[...grid.querySelectorAll('input[type="checkbox"]')];
+                  const done=boxes.filter(x=>x.checked).length;
+                  count.textContent=done+' / '+boxes.length;
+                  label.textContent=done===boxes.length?'¡checklist completo!':'listos';
+                  localStorage.setItem(STORAGE_KEY,JSON.stringify(Object.fromEntries(boxes.map(x=>[x.dataset.key,x.checked]))));
+                }
+
+                original.forEach((txt,i)=>{
+                  const key='item-'+i;
+                  const item=document.createElement('label');
+                  item.className='check-item';
+                  const cb=document.createElement('input');
+                  cb.type='checkbox';
+                  cb.dataset.key=key;
+                  cb.checked=Boolean(saved[key]);
+                  const span=document.createElement('span');
+                  span.textContent=txt;
+                  cb.addEventListener('change',update);
+                  item.append(cb,span);
+                  grid.append(item);
+                });
+
+                reset.addEventListener('click',()=>{
+                  grid.querySelectorAll('input').forEach(x=>x.checked=false);
+                  update();
+                });
+
+                const note=document.createElement('div');
+                note.className='checklist-note';
+                note.textContent='Tus marcas se guardan automáticamente en este dispositivo.';
+                grid.after(note);
+                update();
+              })();
+              </script>
+              '''
+              h = h.replace('</body>', checklist_js + '\n</body>', 1)
+
+              p.write_text(h,encoding='utf-8')
+
+          out=p.read_text(encoding='utf-8')
+          assert marker in out
+          assert 'renderAgenda(d.plan)' in out
+          assert 'chinaTripChecklistV1' in out
+          assert 'agenda-timeline' in out
+          assert 'CHINA-MONEY-CONVERTER-1' in out
+          assert 'FINAL-AGENDA-2026-09-30' in out
+          print('Agenda timeline and interactive checklist installed')
+          PY
+
+      - name: Commit site update
+        shell: bash
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add index.html
+          git diff --cached --quiet || git commit -m 'Improve daily agenda and make checklist interactive'
+          git push origin HEAD:main
+
+      - name: Prepare Pages artifact
+        shell: bash
+        run: |
+          mkdir -p _site
+          cp index.html _site/index.html
+          touch _site/.nojekyll
+
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v4
+        with:
+          path: _site
+
+      - name: Publish
+        id: deployment
+        uses: actions/deploy-pages@v4
+
+      - name: Verify live UX
+        env:
+          PAGE_URL: ${{ steps.deployment.outputs.page_url }}
+        shell: bash
+        run: |
+          python - <<'PY'
+          import os,time,urllib.request
+          url=os.environ['PAGE_URL']
+          for i in range(12):
+              try:
+                  req=urllib.request.Request(url+'?ux=agenda-checklist&v='+str(int(time.time())),headers={'Cache-Control':'no-cache'})
+                  with urllib.request.urlopen(req,timeout=30) as r:
+                      t=r.read().decode('utf-8')
+                  assert 'AGENDA-CHECKLIST-UX-1' in t
+                  assert 'renderAgenda(d.plan)' in t
+                  assert 'chinaTripChecklistV1' in t
+                  print('Published and verified:',url)
+                  break
+              except Exception as e:
+                  print('Waiting for live site:',e,flush=True)
+                  if i==11: raise
+                  time.sleep(10)
+          PY
