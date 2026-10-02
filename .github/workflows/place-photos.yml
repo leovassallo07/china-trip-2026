@@ -1,0 +1,303 @@
+name: Add Chinese city labels and place photos
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/place-photos.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Add real reference photos and Chinese labels
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import base64, json, re, urllib.parse, urllib.request, time
+
+          p=Path('index.html')
+          h=p.read_text(encoding='utf-8')
+          marker='PLACE-PHOTOS-EXPANDED-1'
+
+          files={
+            'pek2':'Beijing Capital International Airport Terminal 2 view.jpg',
+            'uibe':'UIBE Campus.jpg',
+            'lenovo':'LenovoHeadquartersBeijing.jpg',
+            'embassy':'Colombian Embassy Beijing 9060.JPG',
+            'cufe':'Central University of Finance and Economics, Xueyuannanlu campus (20260813150023).jpg',
+            'iflytek':'Beijing iFLYTEK Building at ZPark Phase I (20240807160653).jpg',
+            'tiananmen':'Tiananmen Square.pic.jpg',
+            'mutianyu2':'67054-The-Great-Wall, Mutianyu.jpg',
+            'wangfujing':'Wangfujing street, Beijing.JPG',
+            'beijing_south':'Beijing South Railway Station 20220831.jpg',
+            'hongqiao':'Shanghai Hongqiao Station, 上海虹桥火车站.jpg',
+            'exhibition':'20260209 Shanghai Exhibition Center 03.jpg',
+            'jinmao':'JinMaoTower.JPG',
+            'unitree':'20260425 Unitree Headquarter 02.jpg',
+            'zhejiang':'Yuquan campus 28.jpg',
+            'pvg':'Terminal 1 Departures, Shanghai Pudong International Airport.jpg',
+            'byd':'BYD Company Limited headquarters 01.png',
+            'szu':'Central Plaza of Yuehai Campus, Shenzhen University.jpg',
+            'huaqiangbei':'Huaqiangbei walking street.jpg',
+            'civic':'Shenzhen Civic Center.jpg',
+            'talent':'深圳人才公園與華潤大廈與深圳灣1號.jpg',
+            'shenzhenbay':'Shenzhen Bay Park.jpg',
+            'szx':'Shenzhen BaoAn International Airport.JPG',
+            'shenzhen_north':'SHENZHEN NORTH RAILWAY STATION.jpg'
+          }
+
+          labels={
+            'pek2':'Beijing Capital International Airport · Terminal 2',
+            'uibe':'UIBE campus · referencia de The Beijing Center',
+            'lenovo':'Lenovo Headquarters · Beijing',
+            'embassy':'Embajada de Colombia · Beijing',
+            'cufe':'Central University of Finance and Economics · Beijing',
+            'iflytek':'iFLYTEK · oficina Beijing ZPark',
+            'tiananmen':'Plaza de Tiananmén · Beijing',
+            'mutianyu2':'Gran Muralla · Mutianyu',
+            'wangfujing':'Wangfujing · Beijing',
+            'beijing_south':'Beijing South Railway Station',
+            'hongqiao':'Shanghai Hongqiao Railway Station',
+            'exhibition':'Shanghai Exhibition Center · referencia ferial',
+            'jinmao':'Jin Mao Tower · Shanghai',
+            'unitree':'Unitree Robotics Headquarters · Hangzhou',
+            'zhejiang':'Zhejiang University · referencia académica en Hangzhou',
+            'pvg':'Shanghai Pudong International Airport · Terminal 1',
+            'byd':'BYD Headquarters · Shenzhen',
+            'szu':'Shenzhen University · Yuehai Campus',
+            'huaqiangbei':'Huaqiangbei · Shenzhen',
+            'civic':'Shenzhen Civic Center',
+            'talent':'Shenzhen Talent Park',
+            'shenzhenbay':'Shenzhen Bay Park',
+            'szx':"Shenzhen Bao'an International Airport",
+            'shenzhen_north':'Shenzhen North Railway Station'
+          }
+
+          source_pages={k:'https://commons.wikimedia.org/wiki/File:'+urllib.parse.quote(v.replace(' ','_'),safe='(),&') for k,v in files.items()}
+
+          def get_asset(filename, caption):
+              api='https://commons.wikimedia.org/w/api.php?'+urllib.parse.urlencode({
+                  'action':'query','format':'json','prop':'imageinfo','titles':'File:'+filename,
+                  'iiprop':'url|mime','iiurlwidth':'900'
+              })
+              req=urllib.request.Request(api,headers={'User-Agent':'ChinaTrip2026/1.0 (GitHub Pages personal travel guide)'})
+              with urllib.request.urlopen(req,timeout=45) as r:
+                  data=json.load(r)
+              page=next(iter(data['query']['pages'].values()))
+              ii=page['imageinfo'][0]
+              url=ii.get('thumburl') or ii['url']
+              req2=urllib.request.Request(url,headers={'User-Agent':'ChinaTrip2026/1.0'})
+              with urllib.request.urlopen(req2,timeout=60) as r:
+                  raw=r.read()
+                  mime=r.headers.get_content_type()
+              if len(raw)>900000:
+                  raise RuntimeError('thumbnail too large '+filename+' '+str(len(raw)))
+              return {'src':'data:'+mime+';base64,'+base64.b64encode(raw).decode(),'caption':caption}
+
+          if marker not in h:
+              assets={}
+              for i,(k,f) in enumerate(files.items(),1):
+                  print(f'[{i}/{len(files)}] {f}',flush=True)
+                  try:
+                      assets[k]=get_asset(f,labels[k])
+                  except Exception as e:
+                      print('WARN',k,e,flush=True)
+                  time.sleep(.15)
+
+              required={'pek2','lenovo','embassy','cufe','iflytek','tiananmen','unitree','jinmao','byd','szu','huaqiangbei','civic','talent','shenzhenbay','szx'}
+              missing=required-set(assets)
+              if missing:
+                  raise RuntimeError('Missing required images: '+', '.join(sorted(missing)))
+
+              # Expand day cards with more specific itinerary locations.
+              m=re.search(r'const DATA=(\{.*?\});\nconst ASSETS=',h,re.S)
+              if not m: raise RuntimeError('DATA block not found')
+              data=json.loads(m.group(1))
+              place_updates={
+                ('Beijing','4 nov'):['Beijing Capital · T2','Hilton Beijing','Briefing de llegada'],
+                ('Beijing','5 nov'):['The Beijing Center','Lenovo Headquarters · Beijing','Cena de bienvenida'],
+                ('Beijing','6 nov'):['Embajada de Colombia · Beijing','CUFE · campus Xueyuannanlu','iFLYTEK · Beijing ZPark'],
+                ('Beijing','7 nov'):['The Beijing Center','Ciudad Prohibida','Plaza de Tiananmén'],
+                ('Beijing','8 nov'):['Gran Muralla · Mutianyu','Mutianyu · recorrido y cable car','Wangfujing · referencia para tiempo libre'],
+                ('Shanghai','9 nov'):['Beijing South Railway Station','Tren G3 · alta velocidad','Shanghai Hongqiao Railway Station','THE ONE Shanghai Downtown','WhalesBot · Shanghai'],
+                ('Hangzhou','10 nov'):['Unitree Robotics · Hangzhou','Zhejiang Digital Education Port','Hangzhou · 杭州'],
+                ('Shanghai','11 nov'):['China Electronics Fair 2026','Shanghai Exhibition Center · referencia ferial','The Bund','Jin Mao Tower'],
+                ('Shenzhen','12 nov'):['Shanghai Pudong Airport · T1','Vuelo MU5331','Shenzhen Bao’an Airport','Pullman Shenzhen North Station','BYD · Shenzhen','Shenzhen University · referencia de visita universitaria'],
+                ('Shenzhen','13 nov'):['Conferencias de innovación','Huaqiangbei · 华强北','Ecosistema tecnológico de Shenzhen'],
+                ('Shenzhen','14 nov'):['Futian · Shenzhen Civic Center','Shenzhen Talent Park','Shenzhen Bay Park','Nanshan + Houhai','Compras'],
+                ('Shenzhen','15 nov'):['Check-out Pullman','Shenzhen Bao’an Airport','MU5352 / KL8817']
+              }
+              for city,days in data.items():
+                  for d in days:
+                      key=(city,d['date'])
+                      if key in place_updates:d['places']=place_updates[key]
+              data_json=json.dumps(data,ensure_ascii=False,separators=(',',':'))
+              h=h[:m.start(1)]+data_json+h[m.end(1):]
+
+              # Insert extra embedded assets and mappings before CITY_PHOTOS.
+              insert='\n/* '+marker+' */\nObject.assign(ASSETS,'+json.dumps(assets,ensure_ascii=False,separators=(',',':'))+');\n'
+              overrides={
+                'beijing capital · t2':'pek2',
+                'the beijing center':'uibe',
+                'lenovo headquarters · beijing':'lenovo',
+                'embajada de colombia · beijing':'embassy',
+                'cufe · campus xueyuannanlu':'cufe',
+                'iflytek · beijing zpark':'iflytek',
+                'plaza de tiananmén':'tiananmen',
+                'gran muralla · mutianyu':'mutianyu2',
+                'mutianyu · recorrido y cable car':'mutianyu2',
+                'wangfujing · referencia para tiempo libre':'wangfujing',
+                'beijing south railway station':'beijing_south',
+                'tren g3 · alta velocidad':'beijing_south',
+                'shanghai hongqiao railway station':'hongqiao',
+                'china electronics fair 2026':'exhibition',
+                'shanghai exhibition center · referencia ferial':'exhibition',
+                'jin mao tower':'jinmao',
+                'unitree robotics · hangzhou':'unitree',
+                'zhejiang digital education port':'zhejiang',
+                'shanghai pudong airport · t1':'pvg',
+                'byd · shenzhen':'byd',
+                'shenzhen university · referencia de visita universitaria':'szu',
+                'huaqiangbei · 华强北':'huaqiangbei',
+                'futian · shenzhen civic center':'civic',
+                'shenzhen talent park':'talent',
+                'shenzhen bay park':'shenzhenbay',
+                'nanshan + houhai':'shenzhenbay',
+                'shenzhen bao’an airport':'szx',
+                'shenzhen north railway station':'shenzhen_north'
+              }
+              insert+='const PHOTO_OVERRIDES='+json.dumps(overrides,ensure_ascii=False,separators=(',',':'))+';\n'
+              insert+='const PHOTO_SOURCES='+json.dumps(source_pages,ensure_ascii=False,separators=(',',':'))+';\n'
+              anchor='const CITY_PHOTOS='
+              if anchor not in h: raise RuntimeError('CITY_PHOTOS anchor missing')
+              h=h.replace(anchor,insert+anchor,1)
+
+              # Exact mapping first, then old fallback rules.
+              h=h.replace(
+                "function photoKey(name,c){const n=name.toLowerCase();",
+                "function photoKey(name,c){const n=name.toLowerCase();if(PHOTO_OVERRIDES[n])return PHOTO_OVERRIDES[n];",
+                1
+              )
+
+              # Accept embedded JPEG/PNG/WebP.
+              h=h.replace(
+                "if(!a||!a.src.startsWith('data:image/jpeg;base64,'))throw Error('Missing embedded image: '+key);",
+                "if(!a||!a.src.startsWith('data:image/'))throw Error('Missing embedded image: '+key);",
+                1
+              )
+
+              # Chinese labels on city tabs, two lines.
+              h=h.replace(
+                "function btn(label,selected,fn){const b=document.createElement('button');b.type='button';b.textContent=label;b.className=selected?'active':'';b.setAttribute('aria-pressed',String(selected));b.onclick=fn;return b;}",
+                "function btn(label,selected,fn){const b=document.createElement('button');b.type='button';b.textContent=label;b.className=selected?'active':'';b.setAttribute('aria-pressed',String(selected));b.onclick=fn;return b;}\nconst CITY_HANZI={Beijing:'北京',Shanghai:'上海',Hangzhou:'杭州',Shenzhen:'深圳'};\nfunction cityBtn(c,selected,fn){const b=btn('',selected,fn);const latin=document.createElement('span');latin.className='city-latin';latin.textContent=c;const han=document.createElement('span');han.className='city-hanzi';han.textContent=CITY_HANZI[c]||'';b.append(latin,han);return b;}",
+                1
+              )
+              h=h.replace(
+                "$('#cities').replaceChildren(...Object.keys(DATA).map(c=>btn(c,c===city,()=>{city=c;idx=0;render();})));",
+                "$('#cities').replaceChildren(...Object.keys(DATA).map(c=>cityBtn(c,c===city,()=>{city=c;idx=0;render();})));",
+                1
+              )
+
+              # Source link in photo cards for new Wikimedia references.
+              old="const detail=document.createElement('small');detail.textContent='Foto de referencia: '+ASSETS[key].caption;copy.append(detail);card.append(copy);return card;"
+              new="const detail=document.createElement('small');detail.textContent='Foto de referencia: '+ASSETS[key].caption;copy.append(detail);if(PHOTO_SOURCES[key]){const src=document.createElement('a');src.href=PHOTO_SOURCES[key];src.target='_blank';src.rel='noopener';src.className='photo-source';src.textContent='Wikimedia Commons ↗';copy.append(src);}card.append(copy);return card;"
+              if old in h:h=h.replace(old,new,1)
+
+              css=r'''
+              /* PLACE-PHOTOS-EXPANDED-1 */
+              .city-tabs button{min-width:105px;display:flex;flex-direction:column;align-items:center;gap:2px;line-height:1.08}
+              .city-latin{font-weight:800}
+              .city-hanzi{font-family:"Noto Serif SC","Songti SC","SimSun",serif;font-size:15px;font-weight:500;color:#a52c38;letter-spacing:.08em}
+              .city-tabs button.active .city-hanzi{color:#f3dba9}
+              .places{grid-template-columns:repeat(auto-fit,minmax(210px,1fr))}
+              .place{min-height:220px}
+              .photo-source{display:block;margin-top:5px;color:#f0d59d!important;font-size:9px;font-weight:700;text-decoration:none;opacity:.9}
+              .photo-source:hover{text-decoration:underline}
+              @media(max-width:600px){
+                .city-tabs{grid-template-columns:repeat(2,minmax(0,1fr))}
+                .city-tabs button{width:100%;min-width:0}
+                .places{grid-template-columns:1fr 1fr}
+                .place{min-height:185px}
+              }
+              @media(max-width:420px){.places{grid-template-columns:1fr}}
+              '''
+              h=h.replace('</style>',css+'\n</style>',1)
+              p.write_text(h,encoding='utf-8')
+
+          out=p.read_text(encoding='utf-8')
+          checks=[marker,"Shenzhen:'深圳'","PHOTO_OVERRIDES","Lenovo Headquarters · Beijing","Shenzhen Talent Park","Wikimedia Commons ↗","function renderAgenda"]
+          for x in checks:
+              assert x in out,x
+          print('OK bytes',len(out.encode('utf-8')))
+          PY
+
+      - name: Commit update
+        shell: bash
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add index.html
+          git diff --cached --quiet || git commit -m 'Add Chinese city labels and expanded place photos'
+          git push origin HEAD:main
+
+      - name: Prepare Pages
+        shell: bash
+        run: |
+          mkdir -p _site
+          cp index.html _site/index.html
+          touch _site/.nojekyll
+
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v4
+        with:
+          path: _site
+
+      - name: Publish
+        id: deployment
+        uses: actions/deploy-pages@v4
+
+      - name: Verify public site
+        env:
+          PAGE_URL: ${{ steps.deployment.outputs.page_url }}
+        shell: bash
+        run: |
+          python - <<'PY'
+          import os,time,urllib.request
+          url=os.environ['PAGE_URL']
+          for i in range(15):
+              try:
+                  with urllib.request.urlopen(url+'?v=places-photos-'+str(int(time.time())),timeout=30) as r:
+                      t=r.read().decode('utf-8')
+                  assert 'PLACE-PHOTOS-EXPANDED-1' in t
+                  assert "Shenzhen:'深圳'" in t
+                  assert 'Lenovo Headquarters · Beijing' in t
+                  assert 'Shenzhen Talent Park' in t
+                  assert 'chinaTripChecklistV1' in t
+                  print('LIVE OK',url,len(t))
+                  break
+              except Exception as e:
+                  print('waiting',e,flush=True)
+                  if i==14: raise
+                  time.sleep(10)
+          PY
