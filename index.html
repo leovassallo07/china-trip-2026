@@ -738,6 +738,69 @@ button.active{
     }
     @media(max-width:420px){.places{grid-template-columns:1fr}}
     
+
+    /* DYNAMIC-WEATHER-2026 */
+    .live-weather{
+      margin:0 0 14px;
+      padding:11px 12px;
+      border:1px solid #dfd4bd;
+      border-radius:10px;
+      background:#fffaf1;
+    }
+    .live-weather-top{
+      display:flex;
+      justify-content:space-between;
+      gap:10px;
+      flex-wrap:wrap;
+      align-items:center;
+    }
+    .weather-source{
+      display:inline-flex;
+      align-items:center;
+      gap:6px;
+      color:#7d5f2f;
+      font-size:10px;
+      font-weight:850;
+      text-transform:uppercase;
+      letter-spacing:.07em;
+    }
+    .weather-source.live{color:#31594f}
+    .weather-source.live:before{
+      content:"";
+      width:7px;height:7px;border-radius:50%;
+      background:#4d8d6c;
+      box-shadow:0 0 0 4px rgba(77,141,108,.12);
+    }
+    .weather-updated{font-size:10px;color:#8a8176}
+    .weather-metrics{
+      display:grid;
+      grid-template-columns:1fr 1fr;
+      gap:8px;
+      margin-top:9px;
+    }
+    .weather-metrics div{
+      border-radius:8px;
+      background:#f4ecde;
+      padding:8px 10px;
+      display:flex;
+      justify-content:space-between;
+      align-items:center;
+      gap:8px;
+    }
+    .weather-metrics b{
+      font-family:Georgia,"Times New Roman",serif;
+      font-weight:500;
+      color:#3b4f47;
+      font-size:17px;
+    }
+    .weather-metrics span{font-size:10px;color:#756d64;font-weight:700}
+    .weather-live-note{
+      margin-top:8px;
+      font-size:10px;
+      color:#7a7268;
+      line-height:1.45;
+    }
+    
 </style>
 </head>
 <body>
@@ -763,7 +826,17 @@ button.active{
     <div class="card">
       <div class="kicker">Clima estimado</div>
       <div class="bigtemp" id="temp"></div>
-      <div id="weather" style="color:var(--muted);margin-bottom:14px"></div>
+      <div id="weather" style="color:var(--muted);margin-bottom:10px"></div>
+    <div class="live-weather" id="liveWeather">
+      <div class="live-weather-top">
+        <span class="weather-source" id="weatherSource">Referencia de la organización</span>
+        <span class="weather-updated" id="weatherUpdated"></span>
+      </div>
+      <div class="weather-metrics">
+        <div><b id="rainValue">—</b><span>🌧️ lluvia</span></div>
+        <div><b id="windValue">—</b><span>💨 viento</span></div>
+      </div>
+    </div>
       <div class="soft"><div class="kicker">Qué usar</div><h3>Ropa sugerida</h3><p id="clothes"></p></div>
       <div class="day-tabs" id="days"></div>
     </div>
@@ -908,7 +981,7 @@ function render(){
   const hero=$('#photo');hero.querySelectorAll('.real-photo,.photo-caption').forEach(e=>e.remove());hero.style.backgroundImage='none';const k=heroKey(d);hero.prepend(image(k));
   const cap=document.createElement('div');cap.className='photo-caption';const label=document.createElement('b');label.textContent=ASSETS[k].caption;cap.append(label);hero.append(cap);
   $('#photoKicker').textContent=d.weekday+' \u00b7 '+d.date;$('#photoTitle').textContent=city;$('#photoSub').textContent=d.weather;
-  $('#temp').textContent=d.temp;$('#weather').textContent=d.weather;$('#clothes').textContent=d.clothes;$('#planTitle').textContent=d.weekday+', '+d.date+' \u00b7 '+city;renderAgenda(d.plan);
+  $('#planTitle').textContent=d.weekday+', '+d.date+' \u00b7 '+city;renderAgenda(d.plan);if(window.applyTripWeather)window.applyTripWeather(city,d);else{$('#temp').textContent=d.temp;$('#weather').textContent=d.weather;$('#clothes').textContent=d.clothes;}
   $('#places').replaceChildren(...d.places.map(name=>{const card=document.createElement('div');card.className='place';const key=photoKey(name,city);card.append(image(key));const copy=document.createElement('div');copy.className='place-copy';copy.textContent=name;const detail=document.createElement('small');detail.textContent='Foto de referencia: '+ASSETS[key].caption;copy.append(detail);if(PHOTO_SOURCES[key]){const src=document.createElement('a');src.href=PHOTO_SOURCES[key];src.target='_blank';src.rel='noopener';src.className='photo-source';src.textContent='Wikimedia Commons ↗';copy.append(src);}card.append(copy);return card;}));
 }
 render();
@@ -1050,6 +1123,136 @@ render();
       note.textContent='Tus marcas se guardan automáticamente en este dispositivo.';
       grid.after(note);
       update();
+    })();
+    </script>
+    
+
+    <script>
+    (() => {
+      const WEATHER_MARKER='DYNAMIC-WEATHER-2026';
+      const WEATHER_CITIES={
+        Beijing:{lat:39.9042,lon:116.4074},
+        Shanghai:{lat:31.2304,lon:121.4737},
+        Hangzhou:{lat:30.2741,lon:120.1551},
+        Shenzhen:{lat:22.5431,lon:114.0579}
+      };
+      const WEATHER_YEAR=2026;
+      const MONTH_INDEX=10; // November, zero-based.
+      const cache=new Map();
+
+      function isoForDay(dateLabel){
+        const day=parseInt(dateLabel,10);
+        if(!Number.isFinite(day))return null;
+        return new Date(Date.UTC(WEATHER_YEAR,MONTH_INDEX,day)).toISOString().slice(0,10);
+      }
+
+      function weatherText(code){
+        const map={
+          0:'Despejado',
+          1:'Mayormente despejado',
+          2:'Parcialmente nublado',
+          3:'Nublado',
+          45:'Niebla',
+          48:'Niebla con escarcha',
+          51:'Llovizna ligera',
+          53:'Llovizna',
+          55:'Llovizna intensa',
+          61:'Lluvia ligera',
+          63:'Lluvia moderada',
+          65:'Lluvia fuerte',
+          71:'Nieve ligera',
+          73:'Nieve',
+          75:'Nieve intensa',
+          80:'Chubascos ligeros',
+          81:'Chubascos',
+          82:'Chubascos fuertes',
+          95:'Tormenta',
+          96:'Tormenta con granizo',
+          99:'Tormenta fuerte con granizo'
+        };
+        return map[code]||'Condiciones variables';
+      }
+
+      function clothingAdvice(min,max,rain,wind,city){
+        const items=[];
+        if(max<=8)items.push('abrigo grueso y capas térmicas');
+        else if(max<=14)items.push('chaqueta media y capas');
+        else if(max<=20)items.push('chaqueta ligera o suéter');
+        else items.push('ropa ligera y transpirable');
+
+        if(min<=5)items.push('bufanda y guantes');
+        if(rain>=40)items.push('paraguas o impermeable');
+        if(wind>=25)items.push('capa cortaviento');
+        items.push('calzado cómodo y cerrado');
+        return items.join(', ').replace(/^./,c=>c.toUpperCase())+'.';
+      }
+
+      async function fetchCity(city){
+        if(cache.has(city))return cache.get(city);
+        const c=WEATHER_CITIES[city];
+        if(!c)return null;
+        const url='https://api.open-meteo.com/v1/forecast?latitude='+c.lat+
+          '&longitude='+c.lon+
+          '&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max,wind_speed_10m_max'+
+          '&timezone=Asia%2FShanghai&forecast_days=16';
+        const promise=fetch(url,{cache:'no-store'}).then(r=>{
+          if(!r.ok)throw new Error('Weather HTTP '+r.status);
+          return r.json();
+        });
+        cache.set(city,promise);
+        return promise;
+      }
+
+      async function applyWeather(city,dayData){
+        const source=document.getElementById('weatherSource');
+        const updated=document.getElementById('weatherUpdated');
+        const rain=document.getElementById('rainValue');
+        const wind=document.getElementById('windValue');
+
+        // Always begin with organizer reference.
+        source.textContent='Referencia de la organización';
+        source.classList.remove('live');
+        updated.textContent='';
+        rain.textContent='—';
+        wind.textContent='—';
+        document.getElementById('temp').textContent=dayData.temp;
+        document.getElementById('weather').textContent=dayData.weather;
+        document.getElementById('clothes').textContent=dayData.clothes;
+
+        const target=isoForDay(dayData.date);
+        if(!target)return;
+
+        try{
+          const data=await fetchCity(city);
+          const d=data&&data.daily;
+          if(!d||!Array.isArray(d.time))return;
+          const i=d.time.indexOf(target);
+          if(i<0)return; // Outside current forecast range: keep climatological reference.
+
+          const min=Math.round(d.temperature_2m_min[i]);
+          const max=Math.round(d.temperature_2m_max[i]);
+          const pp=Math.round(d.precipitation_probability_max[i]??0);
+          const ws=Math.round(d.wind_speed_10m_max[i]??0);
+          const code=d.weather_code[i];
+
+          document.getElementById('temp').textContent=min+'–'+max+' °C';
+          document.getElementById('weather').textContent=weatherText(code);
+          document.getElementById('clothes').textContent=clothingAdvice(min,max,pp,ws,city);
+          rain.textContent=pp+'%';
+          wind.textContent=ws+' km/h';
+          source.textContent='Pronóstico actualizado';
+          source.classList.add('live');
+          updated.textContent='Actualizado '+new Intl.DateTimeFormat('es-CO',{
+            day:'numeric',month:'short',hour:'numeric',minute:'2-digit',
+            timeZone:'America/Bogota'
+          }).format(new Date());
+
+        }catch(e){
+          console.warn('No se pudo actualizar el clima',e);
+        }
+      }
+
+      window.applyTripWeather=applyWeather;
     })();
     </script>
     
