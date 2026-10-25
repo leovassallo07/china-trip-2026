@@ -1,0 +1,202 @@
+name: Enrich route general with flight details
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/route-flight-details.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Update Ruta general cards
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import re
+
+          p=Path('index.html')
+          h=p.read_text(encoding='utf-8')
+          marker='ROUTE-FLIGHT-DETAILS-2026'
+
+          new_route=r'''
+          <section class="card route-detail-card" style="margin-top:18px">
+            <div class="kicker">Ruta general</div>
+            <h2 style="margin:6px 0 6px">Transporte del viaje</h2>
+            <p class="route-sub">Vuelos, trenes y traslados principales con horarios de salida y llegada.</p>
+
+            <div class="route-grid">
+              <article class="route-box">
+                <div class="route-date">2 nov</div>
+                <div class="route-main"><b>Bogotá → Ámsterdam</b><span>vía Cartagena</span></div>
+                <div class="route-meta"><span><small>Vuelo</small>KL745</span><span><small>Aerolínea</small>KLM</span></div>
+                <div class="route-times"><span><small>Sale</small>16:05 · BOG</span><span><small>Llega</small>10:45 (+1) · AMS</span></div>
+                <div class="route-note">Escala intermedia en Cartagena: 17:35 llegada · 18:55 continuación.</div>
+              </article>
+
+              <article class="route-box">
+                <div class="route-date">3 nov</div>
+                <div class="route-main"><b>Ámsterdam → París</b><span>Europa</span></div>
+                <div class="route-meta"><span><small>Vuelo</small>KL1407</span><span><small>Aerolínea</small>KLM</span></div>
+                <div class="route-times"><span><small>Sale</small>12:25 · AMS</span><span><small>Llega</small>13:40 · CDG</span></div>
+              </article>
+
+              <article class="route-box">
+                <div class="route-date">3–4 nov</div>
+                <div class="route-main"><b>París → Beijing</b><span>Llegada a China</span></div>
+                <div class="route-meta"><span><small>Vuelo</small>AF382 · KL2066</span><span><small>Aerolínea</small>Air France</span></div>
+                <div class="route-times"><span><small>Sale</small>23:20 · CDG</span><span><small>Llega</small>17:40 (+1) · PEK T2</span></div>
+              </article>
+
+              <article class="route-box route-train">
+                <div class="route-date">9 nov</div>
+                <div class="route-main"><b>Beijing → Shanghái</b><span>Alta velocidad</span></div>
+                <div class="route-meta"><span><small>Tren</small>G3</span><span><small>Clase</small>Primera</span></div>
+                <div class="route-times"><span><small>Sale</small>06:50 · Beijing</span><span><small>Llega</small>11:30 · Shanghái</span></div>
+              </article>
+
+              <article class="route-box route-bus">
+                <div class="route-date">10 nov</div>
+                <div class="route-main"><b>Shanghái ⇄ Hangzhou</b><span>Excursión de un día</span></div>
+                <div class="route-meta"><span><small>Transporte</small>Bus del grupo</span><span><small>Trayecto</small>≈ 2 h</span></div>
+                <div class="route-times"><span><small>Sale</small>07:30 · Shanghái</span><span><small>Regresa</small>17:00 · desde Hangzhou</span></div>
+              </article>
+
+              <article class="route-box">
+                <div class="route-date">12 nov</div>
+                <div class="route-main"><b>Shanghái → Shenzhen</b><span>Vuelo doméstico China</span></div>
+                <div class="route-meta"><span><small>Vuelo</small>MU5331</span><span><small>Aerolínea</small>China Eastern</span></div>
+                <div class="route-times"><span><small>Sale</small>09:10 · Shanghái</span><span><small>Llega</small>11:40*</span></div>
+                <div class="route-note warning">*El PDF reporta 11:40 como llegada; en la agenda detallada esa hora también aparece asociada a la llegada al hotel.</div>
+              </article>
+
+              <article class="route-box">
+                <div class="route-date">15 nov</div>
+                <div class="route-main"><b>Shenzhen → Shanghái</b><span>Fin de la misión</span></div>
+                <div class="route-meta"><span><small>Vuelo</small>MU5352 · KL8817</span><span><small>Aerolínea</small>China Eastern</span></div>
+                <div class="route-times"><span><small>Sale</small>19:10 · SZX T3</span><span><small>Llega</small>21:25 · PVG T1</span></div>
+                <div class="route-note">Salida del hotel: 15:00. El PDF aclara que 15:00 no es la hora del vuelo.</div>
+              </article>
+
+              <article class="route-box">
+                <div class="route-date">16 nov</div>
+                <div class="route-main"><b>Shanghái → Ámsterdam</b><span>Regreso internacional</span></div>
+                <div class="route-meta"><span><small>Vuelo</small>KL896</span><span><small>Aerolínea</small>KLM</span></div>
+                <div class="route-times"><span><small>Sale</small>11:05 · PVG T1</span><span><small>Llega</small>18:25 · AMS</span></div>
+              </article>
+
+              <article class="route-box">
+                <div class="route-date">17 nov</div>
+                <div class="route-main"><b>Ámsterdam → Bogotá</b><span>Regreso a Colombia</span></div>
+                <div class="route-meta"><span><small>Vuelo</small>KL749</span><span><small>Aerolínea</small>KLM</span></div>
+                <div class="route-times"><span><small>Sale</small>09:20 · AMS</span><span><small>Llega</small>14:30 · BOG</span></div>
+              </article>
+            </div>
+          </section>
+          '''
+
+          # Replace existing Ruta general section.
+          m=re.search(r'<section class="card" style="margin-top:18px">s*<div class="kicker">Ruta general</div>.*?</section>',h,re.S)
+          if not m:
+              raise RuntimeError('Ruta general section not found')
+          h=h[:m.start()]+new_route+h[m.end():]
+
+          css=r'''
+          /* ROUTE-FLIGHT-DETAILS-2026 */
+          .route-detail-card{position:relative;overflow:hidden}
+          .route-sub{margin:0 0 16px;color:var(--muted);font-size:13px}
+          .route-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+          .route-box{position:relative;border:1px solid #dfd1b7;background:#fffaf1;border-radius:12px;padding:14px;box-shadow:0 5px 14px rgba(71,49,31,.05)}
+          .route-box:before{content:"✈";position:absolute;right:12px;top:10px;font-size:18px;opacity:.12}
+          .route-box.route-train:before{content:"🚄"}
+          .route-box.route-bus:before{content:"🚌"}
+          .route-date{font-size:10px;letter-spacing:.12em;text-transform:uppercase;font-weight:850;color:#a02e38;margin-bottom:5px}
+          .route-main{display:flex;flex-direction:column;gap:2px;margin-right:24px}
+          .route-main b{font-family:Georgia,"Times New Roman",serif;font-size:18px;font-weight:500;color:#302820}
+          .route-main span{font-size:10px;color:#81776c}
+          .route-meta,.route-times{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:11px}
+          .route-meta span,.route-times span{display:flex;flex-direction:column;gap:2px;padding:8px 9px;border-radius:8px;background:#f3eadb;color:#463f38;font-size:12px;font-weight:750}
+          .route-times span{background:#eaf0ec;color:#31594f}
+          .route-meta small,.route-times small{text-transform:uppercase;letter-spacing:.08em;font-size:8px;font-weight:850;color:#8a7760}
+          .route-times small{color:#6b8175}
+          .route-note{margin-top:9px;padding-top:8px;border-top:1px dashed #ded0b7;color:#756c62;font-size:10px;line-height:1.45}
+          .route-note.warning{color:#8a4d34}
+          @media(max-width:760px){.route-grid{grid-template-columns:1fr}.route-main b{font-size:17px}}
+          '''
+          if marker not in h:
+              h=h.replace('</style>',css+'\n</style>',1)
+
+          p.write_text(h,encoding='utf-8')
+          out=p.read_text(encoding='utf-8')
+          for x in [marker,'KL745','KL1407','AF382','G3','MU5331','MU5352','KL896','KL749','China Eastern']:
+              assert x in out,x
+          print('Route details installed')
+          PY
+
+      - name: Commit
+        shell: bash
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add index.html
+          git diff --cached --quiet || git commit -m 'Complete route general with flight and schedule details'
+          git push origin HEAD:main
+
+      - name: Prepare Pages
+        shell: bash
+        run: |
+          mkdir -p _site
+          cp index.html _site/index.html
+          touch _site/.nojekyll
+
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v4
+        with:
+          path: _site
+
+      - name: Publish
+        id: deployment
+        uses: actions/deploy-pages@v4
+
+      - name: Verify
+        env:
+          PAGE_URL: ${{ steps.deployment.outputs.page_url }}
+        shell: bash
+        run: |
+          python - <<'PY'
+          import os,time,urllib.request
+          url=os.environ['PAGE_URL']
+          for i in range(12):
+              try:
+                  req=urllib.request.Request(url+'?route=flight-details&v='+str(int(time.time())),headers={'Cache-Control':'no-cache'})
+                  with urllib.request.urlopen(req,timeout=30) as r:t=r.read().decode('utf-8')
+                  assert 'ROUTE-FLIGHT-DETAILS-2026' in t
+                  assert 'KL745' in t and 'MU5331' in t and 'KL749' in t
+                  print('Live route details verified',url)
+                  break
+              except Exception as e:
+                  print('Waiting',e,flush=True)
+                  if i==11: raise
+                  time.sleep(10)
+          PY
