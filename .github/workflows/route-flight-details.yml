@@ -129,11 +129,17 @@ jobs:
           </section>
           '''
 
-          # Replace existing Ruta general section.
-          m=re.search(r'<section class="card" style="margin-top:18px">s*<div class="kicker">Ruta general</div>.*?</section>',h,re.S)
-          if not m:
-              raise RuntimeError('Ruta general section not found')
-          h=h[:m.start()]+new_route+h[m.end():]
+          # Replace existing Ruta general section robustly.
+          kicker='<div class="kicker">Ruta general</div>'
+          kp=h.find(kicker)
+          if kp<0:
+              raise RuntimeError('Ruta general kicker not found')
+          start=h.rfind('<section',0,kp)
+          end=h.find('</section>',kp)
+          if start<0 or end<0:
+              raise RuntimeError('Ruta general section bounds not found')
+          end+=len('</section>')
+          h=h[:start]+new_route+h[end:]
 
           css=r'''
           /* ROUTE-FLIGHT-DETAILS-2026 */
