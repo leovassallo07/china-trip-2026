@@ -52,7 +52,8 @@ jobs:
                 <div class="route-main"><b>Bogotá → Ámsterdam</b><span>vía Cartagena</span></div>
                 <div class="route-meta"><span><small>Vuelo</small>KL745</span><span><small>Aerolínea</small>KLM</span></div>
                 <div class="route-times"><span><small>Sale</small>16:05 · BOG</span><span><small>Llega</small>10:45 (+1) · AMS</span></div>
-                <div class="route-note">Escala intermedia en Cartagena: 17:35 llegada · 18:55 continuación.</div>
+                <div class="route-duration"><b>Duración total BOG → AMS</b><span>12 h 40 min</span></div>
+                <div class="route-connection"><b>Parada en Cartagena</b><span>1 h 20 min · 17:35 → 18:55</span></div>
               </article>
 
               <article class="route-box">
@@ -60,6 +61,8 @@ jobs:
                 <div class="route-main"><b>Ámsterdam → París</b><span>Europa</span></div>
                 <div class="route-meta"><span><small>Vuelo</small>KL1407</span><span><small>Aerolínea</small>KLM</span></div>
                 <div class="route-times"><span><small>Sale</small>12:25 · AMS</span><span><small>Llega</small>13:40 · CDG</span></div>
+                <div class="route-duration"><b>Duración</b><span>1 h 15 min</span></div>
+                <div class="route-connection"><b>Conexión previa en Ámsterdam</b><span>1 h 40 min · llegada 10:45 → salida 12:25</span></div>
               </article>
 
               <article class="route-box">
@@ -67,6 +70,8 @@ jobs:
                 <div class="route-main"><b>París → Beijing</b><span>Llegada a China</span></div>
                 <div class="route-meta"><span><small>Vuelo</small>AF382 · KL2066</span><span><small>Aerolínea</small>Air France</span></div>
                 <div class="route-times"><span><small>Sale</small>23:20 · CDG</span><span><small>Llega</small>17:40 (+1) · PEK T2</span></div>
+                <div class="route-duration"><b>Duración</b><span>11 h 20 min</span></div>
+                <div class="route-connection highlight"><b>Tiempo en París</b><span>9 h 40 min · llegada 13:40 → salida 23:20</span></div>
               </article>
 
               <article class="route-box route-train">
@@ -74,13 +79,17 @@ jobs:
                 <div class="route-main"><b>Beijing → Shanghái</b><span>Alta velocidad</span></div>
                 <div class="route-meta"><span><small>Tren</small>G3</span><span><small>Clase</small>Primera</span></div>
                 <div class="route-times"><span><small>Sale</small>06:50 · Beijing</span><span><small>Llega</small>11:30 · Shanghái</span></div>
+                <div class="route-duration"><b>Duración</b><span>4 h 40 min</span></div>
               </article>
 
               <article class="route-box route-bus">
                 <div class="route-date">10 nov</div>
                 <div class="route-main"><b>Shanghái ⇄ Hangzhou</b><span>Excursión de un día</span></div>
                 <div class="route-meta"><span><small>Transporte</small>Bus del grupo</span><span><small>Trayecto</small>≈ 2 h</span></div>
-                <div class="route-times"><span><small>Sale</small>07:30 · Shanghái</span><span><small>Regresa</small>17:00 · desde Hangzhou</span></div>
+                <div class="route-times"><span><small>Sale</small>07:30 · Shanghái</span><span><small>Llegada estimada</small>≈09:30 · Hangzhou</span></div>
+                <div class="route-duration"><b>Bus ida</b><span>≈2 h</span></div>
+                <div class="route-times return"><span><small>Sale de Hangzhou</small>17:00</span><span><small>Llegada estimada</small>≈19:00 · Shanghái</span></div>
+                <div class="route-duration"><b>Bus regreso</b><span>≈2 h</span></div>
               </article>
 
               <article class="route-box">
@@ -88,6 +97,7 @@ jobs:
                 <div class="route-main"><b>Shanghái → Shenzhen</b><span>Vuelo doméstico China</span></div>
                 <div class="route-meta"><span><small>Vuelo</small>MU5331</span><span><small>Aerolínea</small>China Eastern</span></div>
                 <div class="route-times"><span><small>Sale</small>09:10 · Shanghái</span><span><small>Llega</small>11:40*</span></div>
+                <div class="route-duration"><b>Duración según agenda</b><span>2 h 30 min</span></div>
                 <div class="route-note warning">*El PDF reporta 11:40 como llegada; en la agenda detallada esa hora también aparece asociada a la llegada al hotel.</div>
               </article>
 
@@ -96,6 +106,8 @@ jobs:
                 <div class="route-main"><b>Shenzhen → Shanghái</b><span>Fin de la misión</span></div>
                 <div class="route-meta"><span><small>Vuelo</small>MU5352 · KL8817</span><span><small>Aerolínea</small>China Eastern</span></div>
                 <div class="route-times"><span><small>Sale</small>19:10 · SZX T3</span><span><small>Llega</small>21:25 · PVG T1</span></div>
+                <div class="route-duration"><b>Duración</b><span>2 h 15 min</span></div>
+                <div class="route-connection highlight"><b>Espera en Shanghái antes de KLM</b><span>13 h 40 min · llegada 21:25 → salida 11:05 del 16 nov</span></div>
                 <div class="route-note">Salida del hotel: 15:00. El PDF aclara que 15:00 no es la hora del vuelo.</div>
               </article>
 
@@ -104,6 +116,7 @@ jobs:
                 <div class="route-main"><b>Shanghái → Ámsterdam</b><span>Regreso internacional</span></div>
                 <div class="route-meta"><span><small>Vuelo</small>KL896</span><span><small>Aerolínea</small>KLM</span></div>
                 <div class="route-times"><span><small>Sale</small>11:05 · PVG T1</span><span><small>Llega</small>18:25 · AMS</span></div>
+                <div class="route-connection highlight"><b>Noche / conexión en Ámsterdam</b><span>14 h 55 min · llegada 18:25 → salida 09:20 del 17 nov</span></div>
               </article>
 
               <article class="route-box">
@@ -140,6 +153,13 @@ jobs:
           .route-times span{background:#eaf0ec;color:#31594f}
           .route-meta small,.route-times small{text-transform:uppercase;letter-spacing:.08em;font-size:8px;font-weight:850;color:#8a7760}
           .route-times small{color:#6b8175}
+          .route-duration,.route-connection{display:flex;justify-content:space-between;gap:12px;align-items:center;margin-top:8px;padding:8px 10px;border-radius:8px;background:#f8f1e5;color:#62584e;font-size:10px;line-height:1.4}
+          .route-duration b,.route-connection b{color:#7b5a31}
+          .route-connection{background:#edf3ef;color:#31594f;border-left:3px solid #6e927f}
+          .route-connection b{color:#31594f}
+          .route-connection.highlight{background:#f7ebdf;border-left-color:#a02e38;color:#7f4639}
+          .route-connection.highlight b{color:#8f202d}
+          .route-times.return{margin-top:8px}
           .route-note{margin-top:9px;padding-top:8px;border-top:1px dashed #ded0b7;color:#756c62;font-size:10px;line-height:1.45}
           .route-note.warning{color:#8a4d34}
           @media(max-width:760px){.route-grid{grid-template-columns:1fr}.route-main b{font-size:17px}}
@@ -149,7 +169,7 @@ jobs:
 
           p.write_text(h,encoding='utf-8')
           out=p.read_text(encoding='utf-8')
-          for x in [marker,'KL745','KL1407','AF382','G3','MU5331','MU5352','KL896','KL749','China Eastern']:
+          for x in [marker,'KL745','KL1407','AF382','G3','MU5331','MU5352','KL896','KL749','China Eastern','Tiempo en París','Conexión previa en Ámsterdam','14 h 55 min']:
               assert x in out,x
           print('Route details installed')
           PY
