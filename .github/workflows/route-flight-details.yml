@@ -49,6 +49,15 @@ jobs:
             <div class="route-grid">
               <article class="route-box">
                 <div class="route-date">2 nov</div>
+                <div class="route-main"><b>Barranquilla → Bogotá</b><span>Inicio del viaje</span></div>
+                <div class="route-meta"><span><small>Vuelo</small>LA4161</span><span><small>Aerolínea</small>LATAM</span></div>
+                <div class="route-times"><span><small>Sale</small>09:20 · BAQ</span><span><small>Llega</small>10:55 · BOG</span></div>
+                <div class="route-duration"><b>Duración</b><span>1 h 35 min</span></div>
+                <div class="route-connection highlight"><b>Conexión en Bogotá antes de KLM</b><span>5 h 10 min · llegada 10:55 → salida 16:05</span></div>
+              </article>
+
+              <article class="route-box">
+                <div class="route-date">2 nov</div>
                 <div class="route-main"><b>Bogotá → Ámsterdam</b><span>vía Cartagena</span></div>
                 <div class="route-meta"><span><small>Vuelo</small>KL745</span><span><small>Aerolínea</small>KLM</span></div>
                 <div class="route-times"><span><small>Sale</small>16:05 · BOG</span><span><small>Llega</small>10:45 (+1) · AMS</span></div>
@@ -125,6 +134,15 @@ jobs:
                 <div class="route-meta"><span><small>Vuelo</small>KL749</span><span><small>Aerolínea</small>KLM</span></div>
                 <div class="route-times"><span><small>Sale</small>09:20 · AMS</span><span><small>Llega</small>14:30 · BOG</span></div>
               </article>
+
+              <article class="route-box">
+                <div class="route-date">17 nov</div>
+                <div class="route-main"><b>Bogotá → Barranquilla</b><span>Último tramo nacional</span></div>
+                <div class="route-meta"><span><small>Vuelo</small>LA4146</span><span><small>Aerolínea</small>LATAM</span></div>
+                <div class="route-times"><span><small>Sale</small>18:25 · BOG</span><span><small>Llega</small>20:00 · BAQ</span></div>
+                <div class="route-duration"><b>Duración</b><span>1 h 35 min</span></div>
+                <div class="route-connection highlight"><b>Conexión en Bogotá después de KLM</b><span>3 h 55 min · llegada 14:30 → salida 18:25</span></div>
+              </article>
             </div>
           </section>
           '''
@@ -175,7 +193,7 @@ jobs:
 
           p.write_text(h,encoding='utf-8')
           out=p.read_text(encoding='utf-8')
-          for x in [marker,'KL745','KL1407','AF382','G3','MU5331','MU5352','KL896','KL749','China Eastern','Tiempo en París','Conexión previa en Ámsterdam','14 h 55 min']:
+          for x in [marker,'LA4161','KL745','KL1407','AF382','G3','MU5331','MU5352','KL896','KL749','LA4146','LATAM','5 h 10 min','3 h 55 min','Tiempo en París','Conexión previa en Ámsterdam','14 h 55 min']:
               assert x in out,x
           print('Route details installed')
           PY
@@ -218,7 +236,7 @@ jobs:
                   req=urllib.request.Request(url+'?route=flight-details&v='+str(int(time.time())),headers={'Cache-Control':'no-cache'})
                   with urllib.request.urlopen(req,timeout=30) as r:t=r.read().decode('utf-8')
                   assert 'ROUTE-FLIGHT-DETAILS-2026' in t
-                  assert 'KL745' in t and 'MU5331' in t and 'KL749' in t
+                  assert 'LA4161' in t and 'KL745' in t and 'MU5331' in t and 'KL749' in t and 'LA4146' in t
                   print('Live route details verified',url)
                   break
               except Exception as e:
